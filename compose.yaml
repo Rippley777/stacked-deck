@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to your HTTPS URL}
+      DATABASE_PATH: /app/data/stacked-deck.db
+      TRUST_PROXY: 1
+    ports:
+      - '127.0.0.1:3001:3001'
+    volumes:
+      - stacked-deck-data:/app/data
+volumes:
+  stacked-deck-data:
