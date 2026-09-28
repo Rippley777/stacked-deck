@@ -19,6 +19,13 @@ const token = execFileSync(
   ],
   { encoding: 'utf8' },
 ).trim();
+// SQL service-principal SIDs use the application's client ID, not its object ID.
+const clientId = execFileSync(
+  'az',
+  ['ad', 'sp', 'show', '--id', principalId, '--query', 'appId', '-o', 'tsv'],
+  { encoding: 'utf8' },
+).trim();
+if (!/^[0-9a-f-]{36}$/i.test(clientId)) throw new Error('Could not resolve identity client ID.');
 const pool = await new sql.ConnectionPool({
   server,
   database,
@@ -28,10 +35,12 @@ const pool = await new sql.ConnectionPool({
   requestTimeout: 30000,
 }).connect();
 try {
-  await pool.request().input('objectId', sql.UniqueIdentifier, principalId).query(`
+  await pool.request().input('clientId', sql.UniqueIdentifier, clientId).query(`
+    IF EXISTS(SELECT 1 FROM sys.database_principals WHERE name=N'stacked_deck_app' AND sid<>CAST(@clientId AS varbinary(16)))
+      DROP USER [stacked_deck_app];
     IF NOT EXISTS(SELECT 1 FROM sys.database_principals WHERE name=N'stacked_deck_app')
     BEGIN
-      DECLARE @sid varchar(34) = CONVERT(varchar(34),CAST(@objectId AS varbinary(16)),1);
+      DECLARE @sid varchar(34) = CONVERT(varchar(34),CAST(@clientId AS varbinary(16)),1);
       DECLARE @statement nvarchar(500) = N'CREATE USER [stacked_deck_app] WITH SID=' + @sid + N', TYPE=E';
       EXEC sys.sp_executesql @statement;
     END;

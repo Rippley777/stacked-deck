@@ -3494,3 +3494,95 @@ td {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+.systems-toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.systems-toolbar .search-field {
+  flex: 1;
+  min-width: min(100%, 300px);
+}
+.systems-toolbar > select {
+  width: auto;
+  max-width: 100%;
+}
+.systems-count {
+  margin: 20px 0;
+}
+.system-card-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.system-card-title h2 {
+  font-size: 16px;
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.system-card-title svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.system-card-specs {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+  font-size: 12px;
+}
+.system-card-specs > div {
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr);
+  gap: 10px;
+}
+.system-card-specs dt {
+  color: var(--muted);
+}
+.system-card-specs dd {
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.system-form-heading h3 {
+  margin: 8px 0;
+}
+.system-form-heading p {
+  margin: 0;
+}
+.system-specs {
+  margin-top: 16px;
+}
+.system-specs dd {
+  overflow-wrap: anywhere;
+}
+.system-parts .allocation-row .text-link {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .systems-toolbar > select {
+    flex: 1;
+    min-width: 0;
+  }
+  .systems-toolbar .search-field {
+    flex-basis: 100%;
+  }
+}
+@media (max-width: 760px) {
+  .systems-grid {
+    grid-template-columns: 1fr;
+  }
+  .systems-grid .hardware-info {
+    padding: 16px;
+  }
+  .systems-grid .hardware-location,
+  .systems-grid .hardware-card-bottom > span:last-child {
+    font-size: 12px;
+  }
+  .systems-grid .card-assignment {
+    font-size: 11px;
+  }
+}

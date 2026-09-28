@@ -19,6 +19,7 @@ import {
   Network,
   Cable,
   Monitor,
+  Laptop,
   CircuitBoard,
   Zap,
   MemoryStick,
@@ -188,13 +189,17 @@ export function CategoryIcon({ category, size = 20 }: { category: string; size?:
           ? Network
           : /Cable|Adapter/.test(category)
             ? Cable
-            : /Monitor/.test(category)
-              ? Monitor
-              : /Power/.test(category)
-                ? Zap
-                : /RAM/.test(category)
-                  ? MemoryStick
-                  : Box;
+            : /Laptop/.test(category)
+              ? Laptop
+              : /Server/.test(category)
+                ? Server
+                : /Monitor|Computer|PC|All-in-One/.test(category)
+                  ? Monitor
+                  : /Power/.test(category)
+                    ? Zap
+                    : /RAM/.test(category)
+                      ? MemoryStick
+                      : Box;
   return <Icon size={size} />;
 }
 export function TemplateIcon({ name, size = 24 }: { name: string; size?: number }) {

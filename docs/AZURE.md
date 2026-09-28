@@ -12,7 +12,7 @@ Stacked Deck's Azure deployment uses **Linux App Service F1** for the React/Expr
 
 ## Deploy
 
-Prerequisites: Node 24, Azure CLI, Docker, an Azure subscription with F1 capacity and SQL free-offer availability, and an Azure user allowed to create resources and act as SQL's Microsoft Entra administrator.
+Prerequisites: Node 24, Azure CLI, Docker, unzip, an Azure subscription with F1 capacity and SQL free-offer availability, and an Azure user allowed to create resources and act as SQL's Microsoft Entra administrator.
 
 ```sh
 nvm install
@@ -31,7 +31,7 @@ The deployment:
 2. Creates an F1 plan, a Node web app with a system-assigned managed identity, a dedicated SQL logical server and a free-offer database with overage auto-pause.
 3. Verifies the actual plan/database pricing settings before publishing.
 4. Allows the web app's current and possible outbound IPs through SQL's firewall. It adds a temporary rule for the machine performing deployment, grants the app identity database reader/writer/DDL roles, and removes that temporary rule in a `finally` block.
-5. Uploads the package and checks `/api/health` over HTTPS.
+5. Uploads the package, restarts the worker, then checks database health and that the public HTML matches the published client assets over HTTPS.
 
 The resulting URL and resource names are recorded in **`data/azure-deployment.json`** (ignored by Git). Create a new account on the deployed site. Existing local users and demo inventory are not uploaded.
 

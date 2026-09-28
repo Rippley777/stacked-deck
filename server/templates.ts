@@ -1,5 +1,6 @@
 import type { DB } from './db.js';
 import type { ProjectTemplate, Requirement } from '../shared/types.js';
+import { systemCategories } from '../shared/types.js';
 const req = (
   name: string,
   categories: string[],
@@ -16,7 +17,12 @@ const req = (
   optional,
   estimatedUnitCostCents: cost * 100,
 });
-const host = () => req('Compatible host', ['Raspberry Pi', 'Development Board', 'Computer'], 80);
+const host = () =>
+  req(
+    'Compatible host',
+    ['Raspberry Pi', 'Development Board', 'Computer', ...systemCategories],
+    80,
+  );
 const power = () => req('Compatible power supply', ['Power Supply'], 15);
 const network = () => req('Ethernet cable', ['Cable'], 8, 1, false, ['ethernet']);
 const boot = () => req('Boot storage', ['SSD', 'MicroSD'], 25);

@@ -1,5 +1,77 @@
 import { CategoryIcon } from './ui';
 export function HardwareArt({ category, variant = 0 }: { category: string; variant?: number }) {
+  if (['Desktop Computer', 'Laptop', 'Mini PC', 'Server', 'All-in-One'].includes(category)) {
+    const laptop = category === 'Laptop';
+    return (
+      <svg
+        className="hardware-art art-computer"
+        viewBox="0 0 280 180"
+        fill="none"
+        aria-hidden="true"
+      >
+        <ellipse cx="140" cy="150" rx="103" ry="11" fill="black" opacity=".2" />
+        {category === 'Server' ? (
+          <>
+            <rect x="80" y="24" width="120" height="125" rx="7" fill="#253129" stroke="#789168" />
+            {[39, 68, 97, 126].map((y) => (
+              <g key={y}>
+                <rect x="88" y={y} width="104" height="18" rx="3" fill="#17231c" stroke="#53654c" />
+                <circle cx="179" cy={y + 9} r="2" fill="#bdec94" />
+                <path d={`M100 ${y + 7}h55m-55 4h55`} stroke="#62745a" />
+              </g>
+            ))}
+          </>
+        ) : laptop ? (
+          <>
+            <rect x="61" y="30" width="158" height="104" rx="6" fill="#273329" stroke="#789168" />
+            <rect x="69" y="38" width="142" height="86" rx="2" fill="#14211b" />
+            <path d="m47 148 14-14h158l14 14v5H47z" fill="#687760" stroke="#899c78" />
+            <path d="M116 143h49l5 6h-59z" fill="#374831" />
+            <path
+              d="m123 82 12 9 22-25"
+              stroke="#a7cf83"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        ) : (
+          <>
+            <rect x="42" y="38" width="137" height="92" rx="6" fill="#2b392d" stroke="#789168" />
+            <rect x="50" y="46" width="121" height="75" rx="2" fill="#14211b" />
+            <path d="M103 130v15m-22 4h44" stroke="#849a72" strokeWidth="5" strokeLinecap="round" />
+            <path
+              d="m94 84 12 9 22-25"
+              stroke="#a7cf83"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {category !== 'All-in-One' && (
+              <>
+                <rect
+                  x="193"
+                  y="25"
+                  width="43"
+                  height="125"
+                  rx="5"
+                  fill="#273329"
+                  stroke="#789168"
+                />
+                {[65, 110].map((y) => (
+                  <g key={y}>
+                    <circle cx="214" cy={y} r="15" fill="#14211b" stroke="#647d53" />
+                    <circle cx="214" cy={y} r="8" stroke="#a7cf83" opacity=".65" />
+                  </g>
+                ))}
+                <circle cx="215" cy="38" r="2" fill="#bdec94" />
+              </>
+            )}
+          </>
+        )}
+      </svg>
+    );
+  }
   if (
     ![
       'GPU',

@@ -66,6 +66,88 @@ test.skipIf(!enabled)(
     );
     expect((await bob.post('/api/inventory').set(headers).send(input)).status).toBe(400);
     expect((await alice.get('/api/inventory?tag=arm64')).body.total).toBe(1);
+    const computerInput = {
+      kind: 'System',
+      name: 'SQL test desktop',
+      category: 'Desktop Computer',
+      quantity: 1,
+      condition: 'Good',
+      status: 'Available',
+      estimatedValueCents: 100000,
+      systemSpecs: { buildType: 'Custom build', processor: 'Ryzen 7', memoryGB: 32 },
+    };
+    const computer = await alice.post('/api/inventory').set(headers).send(computerInput);
+    expect(computer.status).toBe(201);
+    expect(computer.body.systemSpecs.memoryGB).toBe(32);
+    expect((await alice.get('/api/inventory?kind=System&q=Ryzen')).body.total).toBe(1);
+    const ram = await alice
+      .post('/api/inventory')
+      .set(headers)
+      .send({ ...input, name: 'SQL test RAM', category: 'RAM', estimatedValueCents: 5000 });
+    const linked = await alice
+      .post(`/api/inventory/${computer.body.id}/components`)
+      .set(headers)
+      .send({ itemId: ram.body.id, quantity: 2 });
+    expect(linked.status).toBe(201);
+    expect((await alice.get(`/api/inventory/${ram.body.id}`)).body.availableQuantity).toBe(1);
+    expect((await alice.get(`/api/inventory/${ram.body.id}`)).body.installedIn[0].systemId).toBe(
+      computer.body.id,
+    );
+    expect(
+      (
+        await bob
+          .post(`/api/inventory/${computer.body.id}/components`)
+          .set(headers)
+          .send({ itemId: ram.body.id, quantity: 1 })
+      ).status,
+    ).toBe(404);
+    const competing = await alice
+      .post('/api/projects')
+      .set(headers)
+      .send({ name: 'Competing SQL build', status: 'Planning' });
+    expect(
+      (
+        await alice
+          .post(`/api/projects/${competing.body.id}/assignments`)
+          .set(headers)
+          .send({ itemId: ram.body.id, quantity: 2 })
+      ).status,
+    ).toBe(409);
+    expect((await alice.delete(`/api/inventory/${ram.body.id}`).set(headers)).status).toBe(409);
+    expect((await alice.get('/api/dashboard')).body.totalValueCents).toBe(124500);
+    expect(
+      (
+        await alice
+          .put(`/api/inventory/${computer.body.id}`)
+          .set(headers)
+          .send({ ...computerInput, systemSpecs: { memoryGB: 64 } })
+      ).status,
+    ).toBe(200);
+    expect((await alice.get(`/api/inventory/${computer.body.id}`)).body.systemSpecs.memoryGB).toBe(
+      64,
+    );
+    expect(
+      (
+        await alice
+          .delete(`/api/inventory/${computer.body.id}/components/${linked.body.components[0].id}`)
+          .set(headers)
+      ).status,
+    ).toBe(204);
+    expect((await alice.get(`/api/inventory/${ram.body.id}`)).body.availableQuantity).toBe(3);
+    expect(
+      (
+        await alice
+          .post(`/api/inventory/${computer.body.id}/components`)
+          .set(headers)
+          .send({ itemId: ram.body.id, quantity: 3 })
+      ).status,
+    ).toBe(201);
+    expect((await alice.delete(`/api/inventory/${computer.body.id}`).set(headers)).status).toBe(
+      204,
+    );
+    expect((await alice.get(`/api/inventory/${ram.body.id}`)).body.availableQuantity).toBe(3);
+    await alice.delete(`/api/inventory/${ram.body.id}`).set(headers);
+    await alice.delete(`/api/projects/${competing.body.id}`).set(headers);
     const projects = [];
     for (const name of ['First plan', 'Second plan']) {
       const response = await alice

@@ -7,9 +7,17 @@ import type {
   Project,
   ProjectTemplate,
   Requirement,
+  SystemComponent,
 } from '../shared/types.js';
 import type { ItemInput, ProjectInput } from '../shared/validation.js';
 import { AppError } from './errors.js';
+import {
+  assertEditableSystem,
+  assertInstall,
+  assertItemUpdate,
+  hydrateInventory,
+  type InventoryRow,
+} from './inventory.js';
 
 type RequirementRow = Omit<Requirement, 'categories' | 'tags' | 'optional'> & {
   categories: string;
@@ -45,25 +53,15 @@ export class Repository {
       .prepare(
         `SELECT i.*,l.name locationName FROM inventory_items i LEFT JOIN locations l ON l.id=i.locationId WHERE i.userId=? ORDER BY i.createdAt DESC,i.id`,
       )
-      .all(this.userId) as InventoryItem[];
-    const tags = new Map<string, string[]>();
-    const allocations = new Map<string, Assignment[]>();
-    for (const t of tagRows) tags.set(t.itemId, [...(tags.get(t.itemId) || []), t.tag]);
-    for (const a of assignments)
-      allocations.set(a.itemId, [...(allocations.get(a.itemId) || []), a]);
-    return rows.map((i) => {
-      const assigned = allocations.get(i.id) || [];
-      return {
-        ...i,
-        tags: tags.get(i.id) || [],
-        assignments: assigned,
-        availableQuantity:
-          i.status === 'Available'
-            ? Math.max(0, i.quantity - assigned.reduce((n, a) => n + a.quantity, 0))
-            : 0,
-      };
-    });
+      .all(this.userId) as InventoryRow[];
+    const components = this.db
+      .prepare(
+        'SELECT c.*,s.name systemName,i.name itemName,i.category FROM system_components c JOIN inventory_items s ON s.id=c.systemId JOIN inventory_items i ON i.id=c.itemId WHERE c.userId=?',
+      )
+      .all(this.userId) as SystemComponent[];
+    return hydrateInventory(rows, assignments, tagRows, components);
   }
+
   item(id: string) {
     const item = this.inventory().find((i) => i.id === id);
     if (!item) throw new AppError(404, 'Hardware not found.');
@@ -71,20 +69,7 @@ export class Repository {
   }
   saveItem(input: ItemInput, id: string = randomUUID(), update = false) {
     return this.db.transaction(() => {
-      if (update) {
-        const item = this.item(id);
-        const allocated = item.assignments.reduce((n, a) => n + a.quantity, 0);
-        if (input.quantity < allocated)
-          throw new AppError(
-            409,
-            `This card has ${allocated} units assigned. Release them before reducing quantity.`,
-          );
-        if (allocated && input.status !== 'Available')
-          throw new AppError(
-            409,
-            'Release project assignments before changing this card’s base status. Project status controls reserved and in-use units.',
-          );
-      }
+      if (update) assertItemUpdate(this.item(id), input);
       if (
         input.locationId &&
         !this.db
@@ -95,7 +80,8 @@ export class Repository {
       this.db
         .prepare('INSERT OR IGNORE INTO categories(userId,name) VALUES (?,?)')
         .run(this.userId, input.category);
-      const { tags, ...fields } = input;
+      const { tags, systemSpecs, ...rest } = input;
+      const fields = { ...rest, systemSpecs: systemSpecs ? JSON.stringify(systemSpecs) : null };
       const keys = Object.keys(fields);
       if (update)
         this.db
@@ -123,8 +109,11 @@ export class Repository {
   }
   deleteItem(id: string) {
     const item = this.item(id);
-    if (item.assignments.length)
-      throw new AppError(409, 'Release this hardware from its projects before deleting it.');
+    if (item.assignments.length || item.installedIn.length)
+      throw new AppError(
+        409,
+        'Release this hardware from projects and computers before deleting it.',
+      );
     this.db.prepare('DELETE FROM inventory_items WHERE id=? AND userId=?').run(id, this.userId);
   }
   locations(): Location[] {
@@ -254,6 +243,30 @@ export class Repository {
       .prepare('DELETE FROM project_assignments WHERE id=? AND projectId=? AND userId=?')
       .run(assignmentId, projectId, this.userId);
     if (!result.changes) throw new AppError(404, 'Assignment not found.');
+  }
+  install(systemId: string, itemId: string, quantity: number) {
+    return this.db
+      .transaction(() => {
+        assertInstall(this.item(systemId), this.item(itemId), quantity);
+        this.db
+          .prepare(
+            'INSERT INTO system_components(id,userId,systemId,itemId,quantity) VALUES (?,?,?,?,?) ON CONFLICT(systemId,itemId) DO UPDATE SET quantity=quantity+excluded.quantity',
+          )
+          .run(randomUUID(), this.userId, systemId, itemId, quantity);
+        return this.item(systemId);
+      })
+      .immediate();
+  }
+  uninstall(systemId: string, componentId: string) {
+    this.db
+      .transaction(() => {
+        assertEditableSystem(this.item(systemId));
+        const result = this.db
+          .prepare('DELETE FROM system_components WHERE id=? AND systemId=? AND userId=?')
+          .run(componentId, systemId, this.userId);
+        if (!result.changes) throw new AppError(404, 'Installed part not found.');
+      })
+      .immediate();
   }
   templates(): ProjectTemplate[] {
     return (

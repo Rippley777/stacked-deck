@@ -352,3 +352,25 @@ describe('production and reservation invariants', () => {
     }
   });
 });
+
+describe('Azure proxy authentication limits', () => {
+  it.each(['203.0.113.7', '[2001:db8::7]'])(
+    'limits a client with changing source ports: %s',
+    async (address) => {
+      const localDb = openDatabase(':memory:');
+      try {
+        const proxyApp = createApp(localDb, { trustProxy: 1 });
+        for (let attempt = 0; attempt < 31; attempt++) {
+          const response = await request(proxyApp)
+            .post('/api/auth/login')
+            .set(headers)
+            .set('X-Forwarded-For', `${address}:${50000 + attempt}`)
+            .send({ email: 'invalid', password: 'unused' });
+          expect(response.status).toBe(attempt < 30 ? 400 : 429);
+        }
+      } finally {
+        localDb.close();
+      }
+    },
+  );
+});

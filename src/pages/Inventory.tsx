@@ -29,8 +29,9 @@ import {
   PageHeading,
 } from '../components/ui';
 import { HardwareArt } from '../components/HardwareArt';
+import { ComputerSpecs, SystemParts } from '../components/SystemParts';
 import { ItemForm } from '../components/ItemForm';
-function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
+export function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const { revision, refresh, notify } = useApp();
   const r = useResource<InventoryItem>(`/inventory/${id}`, revision);
   const [edit, setEdit] = useState(false);
@@ -71,7 +72,7 @@ function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
   if (edit && r.data) return <ItemForm item={r.data} onClose={() => setEdit(false)} />;
   const i = r.data;
   return (
-    <Modal title={i?.name || 'Hardware details'} onClose={onClose}>
+    <Modal title={i?.name || 'Hardware details'} onClose={onClose} wide={i?.kind === 'System'}>
       {r.loading ? (
         <Loading />
       ) : r.error || !i ? (
@@ -111,11 +112,15 @@ function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
                 <dd>{i.condition}</dd>
               </div>
               <div>
-                <dt>Current value per unit</dt>
+                <dt>
+                  {i.kind === 'System' ? 'Current value of computer' : 'Current value per unit'}
+                </dt>
                 <dd>{i.estimatedValueCents == null ? '—' : money(i.estimatedValueCents, true)}</dd>
               </div>
               <div>
-                <dt>Purchase price per unit</dt>
+                <dt>
+                  {i.kind === 'System' ? 'Purchase price of computer' : 'Purchase price per unit'}
+                </dt>
                 <dd>{i.purchasePriceCents == null ? '—' : money(i.purchasePriceCents, true)}</dd>
               </div>
               <div>
@@ -131,6 +136,29 @@ function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
                 <dd>{date(i.createdAt)}</dd>
               </div>
             </dl>
+            {i.kind === 'System' && (
+              <>
+                <ComputerSpecs item={i} />
+                <SystemParts system={i} />
+              </>
+            )}
+            {i.installedIn.length > 0 && (
+              <div className="detail-notes">
+                <h4>Installed in computers</h4>
+                {i.installedIn.map((c) => (
+                  <Link
+                    key={c.id}
+                    className="assignment-link"
+                    to={`/systems?system=${c.systemId}`}
+                    onClick={onClose}
+                  >
+                    {c.systemName}
+                    <span>×{c.quantity} · Installed</span>
+                    <ExternalLink size={13} />
+                  </Link>
+                ))}
+              </div>
+            )}
             {i.tags.length > 0 && (
               <div className="tags">
                 {i.tags.map((t) => (
@@ -173,7 +201,11 @@ function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
             )}
             {confirm && (
               <div className="delete-confirm">
-                <p>Delete this hardware permanently? This cannot be undone.</p>
+                <p>
+                  {i.kind === 'System'
+                    ? 'Delete this computer? Linked parts will return to your available deck.'
+                    : 'Delete this hardware permanently? This cannot be undone.'}
+                </p>
                 <button className="button danger" disabled={busy} onClick={() => mutate('delete')}>
                   Yes, delete hardware
                 </button>
@@ -204,7 +236,7 @@ function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
             </div>
             <button className="button primary" onClick={() => setEdit(true)}>
               <Pencil size={16} />
-              Edit hardware
+              {i.kind === 'System' ? 'Edit computer' : 'Edit hardware'}
             </button>
           </div>
         </>
@@ -247,6 +279,10 @@ export default function InventoryPage() {
         title="Your deck"
         description="Every board, drive, and little bit of possibility."
       >
+        <Link className="button secondary" to="/systems?add=1">
+          <Plus size={17} />
+          Add computer
+        </Link>
         <button className="button primary" onClick={addItem}>
           <Plus size={17} />
           Add hardware
@@ -412,12 +448,20 @@ export default function InventoryPage() {
                   >
                     {i.availableQuantity
                       ? `${i.availableQuantity} available`
-                      : i.assignments.length
-                        ? 'In a project'
-                        : i.status}
+                      : i.installedIn.length
+                        ? 'Installed'
+                        : i.assignments.length
+                          ? 'In a project'
+                          : i.status}
                   </Badge>
                   <span>{i.estimatedValueCents != null ? money(i.estimatedValueCents) : '—'}</span>
                 </div>
+                {i.installedIn.length > 0 && (
+                  <p className="card-assignment">
+                    <PackageOpen size={12} />
+                    {i.installedIn.map((c) => c.systemName).join(', ')}
+                  </p>
+                )}
                 {i.assignments.length > 0 && (
                   <p className="card-assignment">
                     <PackageOpen size={12} />

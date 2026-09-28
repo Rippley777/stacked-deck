@@ -6,10 +6,18 @@ import type {
   Project,
   ProjectTemplate,
   Requirement,
+  SystemComponent,
 } from '../shared/types.js';
 import type { ItemInput, ProjectInput } from '../shared/validation.js';
 import type { UserRepository } from './store.js';
 import { AppError } from './errors.js';
+import {
+  assertEditableSystem,
+  assertInstall,
+  assertItemUpdate,
+  hydrateInventory,
+  type InventoryRow,
+} from './inventory.js';
 import {
   rows,
   execute,
@@ -61,26 +69,13 @@ export class SqlServerRepository implements UserRepository {
     const tagRows = await this.query<{ itemId: string; tag: string }>(
       'SELECT itemId,tag FROM item_tags WHERE userId=@userId',
     );
-    const items = await this.query<InventoryItem>(
+    const items = await this.query<InventoryRow>(
       'SELECT i.*,l.name locationName FROM inventory_items i LEFT JOIN locations l ON l.id=i.locationId WHERE i.userId=@userId ORDER BY i.createdAt DESC,i.id',
     );
-    const tags = new Map<string, string[]>();
-    const allocations = new Map<string, Assignment[]>();
-    for (const t of tagRows) tags.set(t.itemId, [...(tags.get(t.itemId) || []), t.tag]);
-    for (const a of assignments)
-      allocations.set(a.itemId, [...(allocations.get(a.itemId) || []), a]);
-    return items.map((i) => {
-      const assigned = allocations.get(i.id) || [];
-      return {
-        ...i,
-        tags: tags.get(i.id) || [],
-        assignments: assigned,
-        availableQuantity:
-          i.status === 'Available'
-            ? Math.max(0, i.quantity - assigned.reduce((n, a) => n + a.quantity, 0))
-            : 0,
-      };
-    });
+    const components = await this.query<SystemComponent>(
+      'SELECT c.*,s.name systemName,i.name itemName,i.category FROM system_components c JOIN inventory_items s ON s.id=c.systemId JOIN inventory_items i ON i.id=c.itemId WHERE c.userId=@userId',
+    );
+    return hydrateInventory(items, assignments, tagRows, components);
   }
   async item(id: string) {
     const item = (await this.inventory()).find((i) => i.id === id);
@@ -93,20 +88,7 @@ export class SqlServerRepository implements UserRepository {
     update = false,
   ): Promise<InventoryItem> {
     return this.mutate(async (r) => {
-      if (update) {
-        const current = await r.item(id);
-        const allocated = current.assignments.reduce((n, a) => n + a.quantity, 0);
-        if (input.quantity < allocated)
-          throw new AppError(
-            409,
-            `This card has ${allocated} units assigned. Release them before reducing quantity.`,
-          );
-        if (allocated && input.status !== 'Available')
-          throw new AppError(
-            409,
-            'Release project assignments before changing this card’s base status. Project status controls reserved and in-use units.',
-          );
-      }
+      if (update) assertItemUpdate(await r.item(id), input);
       if (
         input.locationId &&
         !(
@@ -120,7 +102,8 @@ export class SqlServerRepository implements UserRepository {
         'IF NOT EXISTS(SELECT 1 FROM categories WHERE userId=@userId AND name=@name) INSERT INTO categories(userId,name) VALUES (@userId,@name)',
         { name: input.category },
       );
-      const { tags, ...fields } = input;
+      const { tags, systemSpecs, ...rest } = input;
+      const fields = { ...rest, systemSpecs: systemSpecs ? JSON.stringify(systemSpecs) : null };
       const keys = Object.keys(fields);
       if (update)
         await r.run(
@@ -143,8 +126,12 @@ export class SqlServerRepository implements UserRepository {
   }
   async deleteItem(id: string) {
     await this.mutate(async (r) => {
-      if ((await r.item(id)).assignments.length)
-        throw new AppError(409, 'Release this hardware from its projects before deleting it.');
+      const item = await r.item(id);
+      if (item.assignments.length || item.installedIn.length)
+        throw new AppError(
+          409,
+          'Release this hardware from projects and computers before deleting it.',
+        );
       await r.run('DELETE FROM inventory_items WHERE id=@id AND userId=@userId', { id });
     });
   }
@@ -283,6 +270,28 @@ export class SqlServerRepository implements UserRepository {
         ))
       )
         throw new AppError(404, 'Assignment not found.');
+    });
+  }
+  async install(systemId: string, itemId: string, quantity: number) {
+    return this.mutate(async (r) => {
+      assertInstall(await r.item(systemId), await r.item(itemId), quantity);
+      await r.run(
+        'IF EXISTS(SELECT 1 FROM system_components WHERE systemId=@systemId AND itemId=@itemId AND userId=@userId) UPDATE system_components SET quantity=quantity+@quantity WHERE systemId=@systemId AND itemId=@itemId AND userId=@userId; ELSE INSERT INTO system_components(id,userId,systemId,itemId,quantity) VALUES (@id,@userId,@systemId,@itemId,@quantity)',
+        { id: randomUUID(), systemId, itemId, quantity },
+      );
+      return r.item(systemId);
+    });
+  }
+  async uninstall(systemId: string, componentId: string) {
+    await this.mutate(async (r) => {
+      assertEditableSystem(await r.item(systemId));
+      if (
+        !(await r.run(
+          'DELETE FROM system_components WHERE id=@componentId AND systemId=@systemId AND userId=@userId',
+          { systemId, componentId },
+        ))
+      )
+        throw new AppError(404, 'Installed part not found.');
     });
   }
   async templates(): Promise<ProjectTemplate[]> {

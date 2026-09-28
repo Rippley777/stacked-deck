@@ -22,6 +22,8 @@ const item = (
   createdAt: '',
   updatedAt: '',
   assignments: [],
+  components: [],
+  installedIn: [],
   availableQuantity,
 });
 const req = (

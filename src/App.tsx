@@ -2,6 +2,7 @@ import { useEffect, useState, lazy, Suspense, type FormEvent } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
+  Monitor,
   Layers,
   FolderKanban,
   MapPin,
@@ -26,10 +27,12 @@ const DashboardPage = lazy(() => import('./pages/Dashboard'));
 const InventoryPage = lazy(() => import('./pages/Inventory'));
 const RecommendationsPage = lazy(() => import('./pages/Recommendations'));
 const ProjectsPage = lazy(() => import('./pages/Projects'));
+const SystemsPage = lazy(() => import('./pages/Systems'));
 const LocationsPage = lazy(() => import('./pages/Locations'));
 const links = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
   { path: '/deck', label: 'Your deck', icon: Layers },
+  { path: '/systems', label: 'Computers', icon: Monitor },
   { path: '/projects', label: 'Projects', icon: FolderKanban },
   { path: '/locations', label: 'Locations', icon: MapPin },
 ];
@@ -370,6 +373,7 @@ export default function App() {
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/deck" element={<InventoryPage />} />
                 <Route path="/build" element={<RecommendationsPage />} />
+                <Route path="/systems" element={<SystemsPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/locations" element={<LocationsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

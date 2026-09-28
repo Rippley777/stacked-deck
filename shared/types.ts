@@ -16,7 +16,38 @@ export const projectStatuses = [
   'Abandoned',
 ] as const;
 export const conditions = ['New', 'Like New', 'Good', 'Fair', 'For Parts'] as const;
+export const systemCategories = [
+  'Desktop Computer',
+  'Laptop',
+  'Mini PC',
+  'Server',
+  'All-in-One',
+] as const;
+export const buildTypes = ['Prebuilt', 'Custom build'] as const;
+export interface SystemSpecs {
+  buildType: (typeof buildTypes)[number];
+  processor: string;
+  graphics: string;
+  memoryGB: number | null;
+  storage: string;
+  motherboard: string;
+  powerSupply: string;
+  operatingSystem: string;
+}
+export interface SystemComponent {
+  id: string;
+  systemId: string;
+  systemName: string;
+  itemId: string;
+  itemName: string;
+  category: string;
+  quantity: number;
+}
 export const defaultCategories = [
+  ...systemCategories,
+  'Computer',
+  'Case',
+  'Cooling',
   'CPU',
   'GPU',
   'RAM',
@@ -60,6 +91,10 @@ export interface Assignment {
   projectStatus: (typeof projectStatuses)[number];
 }
 export interface InventoryItem {
+  kind: 'Component' | 'System';
+  systemSpecs: SystemSpecs | null;
+  components: SystemComponent[];
+  installedIn: SystemComponent[];
   id: string;
   name: string;
   manufacturer: string;

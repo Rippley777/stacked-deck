@@ -63,6 +63,15 @@ command('docker', [
   `type=local,dest=${artifacts}`,
   '.',
 ]);
+const expectedIndex = command('unzip', [
+  '-p',
+  resolve(artifacts, 'stacked-deck.zip'),
+  'dist/client/index.html',
+]);
+const expectedRelease = createHash('sha256')
+  .update(command('unzip', ['-p', resolve(artifacts, 'stacked-deck.zip'), 'dist/server/app.js']))
+  .digest('hex')
+  .slice(0, 16);
 console.log(
   `Provisioning ${appName} in ${location}: F1 hosting and SQL free offer with AutoPause…`,
 );
@@ -98,7 +107,7 @@ const database = az([
   '-n',
   outputs.databaseName,
 ]);
-const plan = az(['appservice', 'plan', 'show', '-g', resourceGroup, '-n', `${appName}-plan`]);
+const plan = az(['appservice', 'plan', 'show', '-g', resourceGroup, '-n', `${appName}-hosting`]);
 if (
   plan.sku.name !== 'F1' ||
   !database.useFreeLimit ||
@@ -185,16 +194,39 @@ try {
     'true',
     '--restart',
     'true',
+    '--track-status',
+    'false',
     '--timeout',
     '600000',
   ]);
-  const response = await fetch(`${outputs.url}/api/health`, {
-    signal: AbortSignal.timeout(120000),
-  });
-  if (!response.ok)
-    throw new Error(
-      `Deployment health check returned HTTP ${response.status}. Inspect Azure logs.`,
-    );
+  // Upload completion can precede the worker switching its mounted package.
+  az(['webapp', 'restart', '-g', resourceGroup, '-n', appName]);
+  let healthy = false;
+  let lastStatus = 'not reachable';
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      const response = await fetch(`${outputs.url}/api/health`, {
+        signal: AbortSignal.timeout(30000),
+      });
+      lastStatus = response.ok
+        ? 'waiting for the published server release'
+        : `HTTP ${response.status}`;
+      if (response.ok && (await response.json()).release === expectedRelease) {
+        const page = await fetch(outputs.url, { signal: AbortSignal.timeout(30000) });
+        if (page.ok && (await page.text()).trim() === expectedIndex) {
+          healthy = true;
+          break;
+        }
+        lastStatus = 'waiting for the published client assets';
+      }
+    } catch (error) {
+      lastStatus = error.message;
+    }
+    console.log(`Waiting for Azure startup (${lastStatus})…`);
+    await new Promise((resolve) => setTimeout(resolve, 15000));
+  }
+  if (!healthy)
+    throw new Error(`Deployment health check failed (${lastStatus}). Inspect Azure logs.`);
   console.log(`Deployment healthy: ${outputs.url}`);
   console.log(
     'Create an account on the deployed site. Local accounts and demo inventory were not uploaded.',

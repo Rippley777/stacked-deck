@@ -28,6 +28,8 @@ export interface UserRepository {
   deleteProject(id: string): Awaitable<void>;
   assign(projectId: string, itemId: string, quantity: number): Awaitable<Project>;
   release(projectId: string, assignmentId: string): Awaitable<void>;
+  install(systemId: string, itemId: string, quantity: number): Awaitable<InventoryItem>;
+  uninstall(systemId: string, componentId: string): Awaitable<void>;
   templates(): Awaitable<ProjectTemplate[]>;
 }
 export interface AppStore {

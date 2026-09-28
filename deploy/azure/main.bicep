@@ -10,7 +10,7 @@ param databaseName string = 'stacked-deck'
 var serverName = '${appName}-sql'
 
 resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
-  name: '${appName}-plan'
+  name: '${appName}-hosting'
   location: location
   kind: 'linux'
   sku: { name: 'F1', tier: 'Free' }

@@ -33,6 +33,7 @@ Sign in with `SEED_EMAIL` (default `demo@stackeddeck.local`) and your `SEED_PASS
 
 - Account creation, sign in/out, protected API routes, private per-user workspaces, persistent 30-day sessions.
 - Inventory creation, details, edits, archive/restore and deletion. Quantities, condition, base status, manufacturer, model, per-unit purchase/current values, purchase date, serial, notes, tags and optional image URL.
+- Complete computer catalog: desktops, laptops, mini PCs, servers and all-in-ones; prebuilt/custom build origin; processor, graphics, RAM, storage, motherboard, power supply and OS specifications. Installed parts can be linked from your deck with quantity limits and cannot be double-booked for projects.
 - Custom categories and tags. Search across names, manufacturer, model, serial, notes and tags. Category, status, location and tag filters, paging, grid/list views.
 - Location management with descriptive paths such as `Office → Shelf → Bin 3`. Deleting a location clears the location reference without deleting its hardware.
 - Dashboard with physical quantities, availability, assigned units, value, recent additions, categories, status breakdown and recommendations.
@@ -55,7 +56,7 @@ Sign in with `SEED_EMAIL` (default `demo@stackeddeck.local`) and your `SEED_PASS
 
 The user ID comes exclusively from the authenticated session. Owner-scoped repository queries and composite ownership foreign keys protect references between inventory, locations, projects, tags and assignments. Money is stored as integer USD cents; inventory values and purchase prices are **per unit**. Dashboard valuation multiplies current value by quantity and excludes Sold/Archived items; unpriced items contribute zero.
 
-SQLite keeps the MVP simple and is intended for **one application instance with a persistent local disk**. Indexed ownership/status/category/location queries isolate users. Inventory filter hydration currently loads one user's deck before filtering/paging, which is appropriate for hundreds of cards but should move into indexed SQL/FTS for very large individual decks. Migrate the repository layer to PostgreSQL before scaling to multiple application servers or sustained high write concurrency. WAL permits concurrent reads but SQLite still serializes writers; see [SQLite WAL documentation](https://www.sqlite.org/wal.html).
+SQLite keeps the MVP simple and is intended for **one application instance with a persistent local disk**. Indexed ownership/status/category/location queries isolate users. Inventory filter hydration currently loads one user's deck before filtering/paging, which is appropriate for hundreds of cards but should move into indexed SQL/FTS for very large individual decks. Use the shared Azure SQL backend and a distributed rate-limit store before scaling to multiple application servers. WAL permits concurrent reads but SQLite still serializes writers; see [SQLite WAL documentation](https://www.sqlite.org/wal.html).
 
 ### Schema
 
@@ -64,7 +65,8 @@ SQLite keeps the MVP simple and is intended for **one application instance with 
 - `sessions`: hashed token, user and expiry. Cookies are HTTP-only, SameSite=Lax, and Secure in production. Tokens rotate on sign in; logout revokes the server session.
 - `categories`, `tags`: per-user vocabulary; `item_tags` connects cards to tags.
 - `locations`: per-user descriptive storage locations.
-- `inventory_items`: hardware fields and owner/category/location relationships.
+- `inventory_items`: hardware fields and owner/category/location relationships; component/system kind and optional structured computer specifications.
+- `system_components`: owner-constrained links from complete computers to installed inventory parts and quantities.
 - `projects`, `project_requirements`: private build plans and editable criteria.
 - `project_assignments`: owner-constrained project/item relationship with allocated quantity.
 - `project_templates`, `template_requirements`: shared build recipes, installed idempotently at startup.
@@ -75,7 +77,11 @@ Requirement categories/tags are small JSON arrays inside otherwise relational re
 ### Reservation semantics
 
 - `Available` is the allocatable base status. Other base statuses have zero available quantity.
-- Available units = total quantity − project assignments.
+- Available units = total quantity − project assignments − installed units.
+- Each complete computer is a separate card with quantity 1. Its specs can be recorded without creating individual part cards.
+- Linked parts remain in your inventory. Removing a part or deleting its computer releases installed quantities; a computer assigned to a project must be released before changing its installed parts.
+- A computer’s declared value includes its parts. When no whole-computer value is set, the dashboard uses the sum of linked part values; installed units are excluded from separate component valuation.
+- Archive/sell a complete computer to exclude its whole value and its installed parts from the deck valuation. Installed parts remain unavailable until explicitly removed or the computer is deleted.
 - Idea/Planning/Ready assignments display as Reserved. In Progress/Complete assignments display as In Use.
 - Completing a build keeps its parts in use. Abandoning or deleting a project releases its assignments.
 - Release can also be done explicitly from the project's hardware list.
@@ -130,9 +136,9 @@ npm run test:e2e
 npm run build
 ```
 
-Unit and integration tests use in-memory databases. The Playwright test creates disposable accounts and hardware in the development server it starts (or an existing localhost server). To keep browser-test data separate, start a server with `DATABASE_PATH=./data/e2e.db npm run dev` before running it.
+Unit and integration tests use in-memory databases. Playwright starts an isolated local server on ports 5179/3179 and uses `data/e2e.db`, so other projects running on the default development port cannot intercept the tests. It creates disposable accounts and hardware. `PLAYWRIGHT_BASE_URL` targets a deployed server instead.
 
-The API suite covers account isolation, invalid cross-user references, credential/session hashing, CSRF rejection, input validation, filters, lifecycle behavior, and allocation limits. The matching suite covers quantity, overlap, specialist constraints, optional components, tag-only criteria, availability and ranking. The browser test covers registration, locations, adding hardware, template matching, project creation, reservation, reload persistence, mobile layout and logout.
+The API suite covers account isolation, invalid cross-user references, credential/session hashing, CSRF rejection, input validation, filters, lifecycle behavior, and allocation limits. The matching suite covers quantity, overlap, specialist constraints, optional components, tag-only criteria, availability and ranking. Browser tests cover registration, locations, adding hardware, template matching, project creation, reservation, reload persistence, mobile layout and logout, plus computer creation, specifications, installed parts, edits and returning parts to the available deck.
 
 See [verification notes](docs/VERIFICATION.md) for the completed run and deployment limits.
 

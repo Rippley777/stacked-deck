@@ -1,11 +1,22 @@
 import { useState, type FormEvent } from 'react';
 import { Save } from 'lucide-react';
 import type { InventoryItem, Location } from '../../shared/types';
-import { conditions, itemStatuses } from '../../shared/types';
+import { buildTypes, conditions, itemStatuses, systemCategories } from '../../shared/types';
 import { api, useResource } from '../api';
 import { useApp } from '../context';
 import { Modal, Field, ErrorState, Loading } from './ui';
-export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () => void }) {
+export function ItemForm({
+  item,
+  onClose,
+  system = false,
+  onSaved,
+}: {
+  item?: InventoryItem;
+  onClose: () => void;
+  system?: boolean;
+  onSaved?: (item: InventoryItem) => void;
+}) {
+  const isSystem = item ? item.kind === 'System' : system;
   const { refresh, notify } = useApp();
   const meta = useResource<{ categories: string[]; locations: Location[] }>('/meta');
   const [error, setError] = useState('');
@@ -18,9 +29,22 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
     setBusy(true);
     setError('');
     try {
-      await api(`/inventory${item ? `/${item.id}` : ''}`, {
+      const saved = await api<InventoryItem>(`/inventory${item ? `/${item.id}` : ''}`, {
         method: item ? 'PUT' : 'POST',
         body: JSON.stringify({
+          kind: isSystem ? 'System' : 'Component',
+          systemSpecs: isSystem
+            ? {
+                buildType: str('buildType'),
+                processor: str('processor'),
+                graphics: str('graphics'),
+                memoryGB: str('memoryGB') ? Number(str('memoryGB')) : null,
+                storage: str('storage'),
+                motherboard: str('motherboard'),
+                powerSupply: str('powerSupply'),
+                operatingSystem: str('operatingSystem'),
+              }
+            : null,
           name: str('name'),
           manufacturer: str('manufacturer'),
           model: str('model'),
@@ -42,8 +66,15 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
         }),
       });
       refresh();
-      notify(item ? 'Hardware updated.' : 'A new card in your deck.');
+      notify(
+        item
+          ? 'Hardware updated.'
+          : isSystem
+            ? 'Computer added to your collection.'
+            : 'A new card in your deck.',
+      );
       onClose();
+      onSaved?.(saved);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -51,7 +82,19 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
     }
   }
   return (
-    <Modal title={item ? 'Edit hardware' : 'Add to your deck'} onClose={onClose} wide>
+    <Modal
+      title={
+        isSystem
+          ? item
+            ? 'Edit computer'
+            : 'Add a complete computer'
+          : item
+            ? 'Edit hardware'
+            : 'Add to your deck'
+      }
+      onClose={onClose}
+      wide
+    >
       {meta.loading ? (
         <Loading />
       ) : meta.error ? (
@@ -60,7 +103,9 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
         <form onSubmit={submit}>
           <div className="form-body">
             <p className="form-intro">
-              Give your hardware a home. You can fill in the finer details later.
+              {isSystem
+                ? 'Catalog a computer you own, whether it came prebuilt or you assembled it yourself. Link individual inventory parts after saving.'
+                : 'Give your hardware a home. You can fill in the finer details later.'}
             </p>
             <div className="form-grid">
               <Field label="Name *" className="full">
@@ -69,34 +114,61 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
                   required
                   maxLength={160}
                   defaultValue={item?.name}
-                  placeholder="e.g. Raspberry Pi 4 · 8GB"
+                  placeholder={
+                    isSystem ? 'e.g. Living room gaming PC' : 'e.g. Raspberry Pi 4 · 8GB'
+                  }
                   autoFocus
                 />
               </Field>
-              <Field label="Category *" hint="Choose a category or type your own.">
-                <input
-                  name="category"
-                  required
-                  list="categories"
-                  defaultValue={item?.category || 'Raspberry Pi'}
-                  maxLength={160}
-                />
-                <datalist id="categories">
-                  {meta.data?.categories.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              </Field>
-              <Field label="Quantity *">
-                <input
-                  name="quantity"
-                  type="number"
-                  min="1"
-                  max="100000"
-                  required
-                  defaultValue={item?.quantity || 1}
-                />
-              </Field>
+              {isSystem ? (
+                <>
+                  <Field label="Computer type *">
+                    <select name="category" defaultValue={item?.category || 'Desktop Computer'}>
+                      {systemCategories.map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Build origin">
+                    <select
+                      name="buildType"
+                      defaultValue={item?.systemSpecs?.buildType || 'Prebuilt'}
+                    >
+                      {buildTypes.map((t) => (
+                        <option key={t}>{t}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <input name="quantity" type="hidden" value="1" />
+                </>
+              ) : (
+                <>
+                  <Field label="Category *" hint="Choose a category or type your own.">
+                    <input
+                      name="category"
+                      required
+                      list="categories"
+                      defaultValue={item?.category || 'Raspberry Pi'}
+                      maxLength={160}
+                    />
+                    <datalist id="categories">
+                      {meta.data?.categories.map((c) => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
+                  </Field>
+                  <Field label="Quantity *">
+                    <input
+                      name="quantity"
+                      type="number"
+                      min="1"
+                      max="100000"
+                      required
+                      defaultValue={item?.quantity || 1}
+                    />
+                  </Field>
+                </>
+              )}
               <Field label="Manufacturer">
                 <input
                   name="manufacturer"
@@ -128,7 +200,10 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
                     : undefined
                 }
               >
-                <select name="status" defaultValue={item?.status || 'Available'}>
+                <select
+                  name="status"
+                  defaultValue={item?.status || (isSystem ? 'In Use' : 'Available')}
+                >
                   {itemStatuses.map((s) => (
                     <option key={s}>{s}</option>
                   ))}
@@ -151,7 +226,14 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
                   placeholder="homelab, arm64, spare"
                 />
               </Field>
-              <Field label="Current value per unit ($)">
+              <Field
+                label={isSystem ? 'Current value of computer ($)' : 'Current value per unit ($)'}
+                hint={
+                  isSystem
+                    ? 'Includes linked parts. Leave blank to use their combined value.'
+                    : undefined
+                }
+              >
                 <input
                   name="estimatedValue"
                   type="number"
@@ -162,7 +244,9 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
                   }
                 />
               </Field>
-              <Field label="Purchase price per unit ($)">
+              <Field
+                label={isSystem ? 'Purchase price of computer ($)' : 'Purchase price per unit ($)'}
+              >
                 <input
                   name="purchasePrice"
                   type="number"
@@ -187,6 +271,76 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
                   placeholder="https://…"
                 />
               </Field>
+              {isSystem && (
+                <>
+                  <div className="full system-form-heading">
+                    <h3>Computer specifications</h3>
+                    <p className="muted small-text">
+                      Add what you know. Specifications describe this computer; individual parts can
+                      also be linked from your deck.
+                    </p>
+                  </div>
+                  <Field label="Processor">
+                    <input
+                      name="processor"
+                      maxLength={160}
+                      defaultValue={item?.systemSpecs?.processor}
+                      placeholder="e.g. AMD Ryzen 7 7800X3D"
+                    />
+                  </Field>
+                  <Field label="Graphics">
+                    <input
+                      name="graphics"
+                      maxLength={160}
+                      defaultValue={item?.systemSpecs?.graphics}
+                      placeholder="e.g. NVIDIA RTX 4070 / integrated"
+                    />
+                  </Field>
+                  <Field label="Memory (GB)">
+                    <input
+                      name="memoryGB"
+                      type="number"
+                      min="0.5"
+                      max="16384"
+                      step="0.5"
+                      defaultValue={item?.systemSpecs?.memoryGB ?? ''}
+                      placeholder="32"
+                    />
+                  </Field>
+                  <Field label="Storage">
+                    <input
+                      name="storage"
+                      maxLength={500}
+                      defaultValue={item?.systemSpecs?.storage}
+                      placeholder="e.g. 1 TB NVMe SSD + 4 TB HDD"
+                    />
+                  </Field>
+                  <Field label="Motherboard">
+                    <input
+                      name="motherboard"
+                      maxLength={160}
+                      defaultValue={item?.systemSpecs?.motherboard}
+                      placeholder="e.g. ASUS B650"
+                    />
+                  </Field>
+                  <Field label="Power supply">
+                    <input
+                      name="powerSupply"
+                      maxLength={160}
+                      defaultValue={item?.systemSpecs?.powerSupply}
+                      placeholder="e.g. Corsair RM750x · 750 W"
+                    />
+                  </Field>
+                  <Field label="Operating system" className="full">
+                    <input
+                      name="operatingSystem"
+                      maxLength={160}
+                      defaultValue={item?.systemSpecs?.operatingSystem}
+                      placeholder="e.g. Windows 11 / Ubuntu 24.04"
+                    />
+                  </Field>
+                </>
+              )}
               <Field label="Notes" className="full">
                 <textarea
                   name="notes"
@@ -209,7 +363,13 @@ export function ItemForm({ item, onClose }: { item?: InventoryItem; onClose: () 
             </button>
             <button className="button primary" disabled={busy}>
               <Save size={16} />
-              {busy ? 'Saving…' : item ? 'Save changes' : 'Add hardware'}
+              {busy
+                ? 'Saving…'
+                : item
+                  ? 'Save changes'
+                  : isSystem
+                    ? 'Add computer'
+                    : 'Add hardware'}
             </button>
           </div>
         </form>

@@ -2,9 +2,11 @@ import express from 'express';
 import type { ErrorRequestHandler, Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
+import { isIP } from 'node:net';
 import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { ZodError } from 'zod';
 import type { DB } from './db.js';
 import type { Dashboard, User } from '../shared/types.js';
@@ -28,6 +30,7 @@ import { SqliteStore } from './sqlite-store.js';
 import type { AppStore, UserRepository } from './store.js';
 import { recommend, evaluateTemplate } from './compatibility.js';
 import { AppError } from './errors.js';
+import { inventoryValue } from './inventory.js';
 interface Options {
   production?: boolean;
   origin?: string;
@@ -36,6 +39,14 @@ interface Options {
 export function createApp(database: DB | AppStore, options: Options = {}) {
   const db: AppStore = 'repository' in database ? database : new SqliteStore(database);
   const production = options.production ?? false;
+  const compiledServer = resolve('dist/server/app.js');
+  const release =
+    production && existsSync(compiledServer)
+      ? createHash('sha256')
+          .update(readFileSync(compiledServer, 'utf8').trim())
+          .digest('hex')
+          .slice(0, 16)
+      : undefined;
   const origin = options.origin || 'http://localhost:5173';
   const app = express();
   app.disable('x-powered-by');
@@ -77,12 +88,21 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
     limit: 30,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
+    keyGenerator: (req) => {
+      const address = req.ip || req.socket.remoteAddress || '';
+      // Azure can append a changing source port to a trusted forwarded address.
+      // Preserve bare IPv6 addresses and the limiter's IPv6 subnet protection.
+      const ip = address.startsWith('[')
+        ? address.match(/^\[([^\]]+)\](?::\d+)?$/)?.[1] || address
+        : address.replace(/^(\d+\.\d+\.\d+\.\d+):\d+$/, '$1');
+      return ipKeyGenerator(isIP(ip) ? ip : req.socket.remoteAddress || 'unknown');
+    },
     message: { error: 'Too many attempts. Try again in 15 minutes.' },
   });
   const dummyHash = hashPassword('unused-constant-time-verification-password');
   app.get('/api/health', async (_req, res) => {
     await db.health();
-    res.json({ status: 'ok' });
+    res.json({ status: 'ok', ...(release ? { release } : {}) });
   });
   app.post('/api/auth/register', authLimit, async (req, res) => {
     const data = registerSchema.parse(req.body);
@@ -124,12 +144,21 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
     const q = string(req.query.q).toLowerCase();
     if (q)
       items = items.filter((i) =>
-        [i.name, i.manufacturer, i.model, i.serialNumber, i.notes, ...i.tags]
+        [
+          i.name,
+          i.manufacturer,
+          i.model,
+          i.serialNumber,
+          i.notes,
+          ...i.tags,
+          ...Object.values(i.systemSpecs || {}),
+        ]
           .join(' ')
           .toLowerCase()
           .includes(q),
       );
     if (req.query.category) items = items.filter((i) => i.category === req.query.category);
+    if (req.query.kind) items = items.filter((i) => i.kind === req.query.kind);
     if (req.query.status)
       items = items.filter((i) =>
         req.query.status === 'Available'
@@ -139,6 +168,7 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
               i.assignments.some((a) => !['In Progress', 'Complete'].includes(a.projectStatus))
             : req.query.status === 'In Use'
               ? i.status === 'In Use' ||
+                i.installedIn.length > 0 ||
                 i.assignments.some((a) => ['In Progress', 'Complete'].includes(a.projectStatus))
               : i.status === req.query.status,
       );
@@ -166,6 +196,16 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
   );
   app.delete('/api/inventory/:id', async (req, res) => {
     await repo(res).deleteItem(String(req.params.id));
+    res.status(204).end();
+  });
+  app.post('/api/inventory/:id/components', async (req, res) => {
+    const data = assignmentSchema.parse(req.body);
+    res
+      .status(201)
+      .json(await repo(res).install(String(req.params.id), data.itemId, data.quantity));
+  });
+  app.delete('/api/inventory/:id/components/:componentId', async (req, res) => {
+    await repo(res).uninstall(String(req.params.id), String(req.params.componentId));
     res.status(204).end();
   });
   app.get('/api/locations', async (_req, res) => res.json(await repo(res).locations()));
@@ -253,7 +293,8 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
   });
   app.get('/api/dashboard', async (_req, res) => {
     const r = repo(res);
-    const items = (await r.inventory()).filter((i) => !['Sold', 'Archived'].includes(i.status));
+    const inventory = await r.inventory();
+    const items = inventory.filter((i) => !['Sold', 'Archived'].includes(i.status));
     const categories = new Map<string, number>();
     const statuses = new Map<string, number>();
     const add = (map: Map<string, number>, name: string, n: number) =>
@@ -263,6 +304,11 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
       if (i.status !== 'Available') add(statuses, i.status, i.quantity);
       else {
         add(statuses, 'Available', i.availableQuantity);
+        add(
+          statuses,
+          'In Use',
+          i.installedIn.reduce((n, c) => n + c.quantity, 0),
+        );
         for (const a of i.assignments)
           add(
             statuses,
@@ -278,7 +324,7 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
         (n, i) => n + i.assignments.reduce((s, a) => s + a.quantity, 0),
         0,
       ),
-      totalValueCents: items.reduce((n, i) => n + (i.estimatedValueCents || 0) * i.quantity, 0),
+      totalValueCents: inventoryValue(items, inventory),
       activeProjects: (await r.projects()).filter(
         (p) => !['Complete', 'Abandoned'].includes(p.status),
       ).length,
