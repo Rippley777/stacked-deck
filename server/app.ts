@@ -12,6 +12,7 @@ import type { DB } from './db.js';
 import type { Dashboard, User } from '../shared/types.js';
 import {
   itemSchema,
+  systemWithComponentsSchema,
   loginSchema,
   registerSchema,
   projectSchema,
@@ -191,6 +192,10 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
   app.post('/api/inventory', async (req, res) =>
     res.status(201).json(await repo(res).saveItem(itemSchema.parse(req.body))),
   );
+  app.post('/api/inventory/systems', async (req, res) => {
+    const { system, components } = systemWithComponentsSchema.parse(req.body);
+    res.status(201).json(await repo(res).createSystem(system, components));
+  });
   app.put('/api/inventory/:id', async (req, res) =>
     res.json(await repo(res).saveItem(itemSchema.parse(req.body), String(req.params.id), true)),
   );

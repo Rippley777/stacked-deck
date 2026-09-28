@@ -33,7 +33,7 @@ Sign in with `SEED_EMAIL` (default `demo@stackeddeck.local`) and your `SEED_PASS
 
 - Account creation, sign in/out, protected API routes, private per-user workspaces, persistent 30-day sessions.
 - Inventory creation, details, edits, archive/restore and deletion. Quantities, condition, base status, manufacturer, model, per-unit purchase/current values, purchase date, serial, notes, tags and optional image URL.
-- Complete computer catalog: desktops, laptops, mini PCs, servers and all-in-ones; prebuilt/custom build origin; processor, graphics, RAM, storage, motherboard, power supply and OS specifications. Installed parts can be linked from your deck with quantity limits and cannot be double-booked for projects.
+- Complete computer catalog: desktops, laptops, mini PCs, servers and all-in-ones; prebuilt/custom build origin; processor, graphics, RAM, storage, motherboard, power supply and OS specifications. When creating a computer, enter installed components directly: each component name reveals another optional input below. The computer and its new parts save together, with all entered quantities installed. Existing parts can also be linked from your deck with quantity limits and cannot be double-booked for projects.
 - Custom categories and tags. Search across names, manufacturer, model, serial, notes and tags. Category, status, location and tag filters, paging, grid/list views.
 - Location management with descriptive paths such as `Office → Shelf → Bin 3`. Deleting a location clears the location reference without deleting its hardware.
 - Dashboard with physical quantities, availability, assigned units, value, recent additions, categories, status breakdown and recommendations.

@@ -13,6 +13,7 @@ export interface UserRepository {
   inventory(): Awaitable<InventoryItem[]>;
   item(id: string): Awaitable<InventoryItem>;
   saveItem(input: ItemInput, id?: string, update?: boolean): Awaitable<InventoryItem>;
+  createSystem(input: ItemInput, components: ItemInput[]): Awaitable<InventoryItem>;
   deleteItem(id: string): Awaitable<void>;
   locations(): Awaitable<Location[]>;
   saveLocation(

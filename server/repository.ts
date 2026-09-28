@@ -107,6 +107,18 @@ export class Repository {
       return this.item(id);
     })();
   }
+  createSystem(input: ItemInput, components: ItemInput[]) {
+    return this.db
+      .transaction(() => {
+        const system = this.saveItem(input);
+        for (const component of components) {
+          const part = this.saveItem(component);
+          this.install(system.id, part.id, part.quantity);
+        }
+        return this.item(system.id);
+      })
+      .immediate();
+  }
   deleteItem(id: string) {
     const item = this.item(id);
     if (item.assignments.length || item.installedIn.length)

@@ -124,6 +124,16 @@ export class SqlServerRepository implements UserRepository {
       return r.item(id);
     });
   }
+  async createSystem(input: ItemInput, components: ItemInput[]): Promise<InventoryItem> {
+    return this.mutate(async (r) => {
+      const system = await r.saveItem(input);
+      for (const component of components) {
+        const part = await r.saveItem(component);
+        await r.install(system.id, part.id, part.quantity);
+      }
+      return r.item(system.id);
+    });
+  }
   async deleteItem(id: string) {
     await this.mutate(async (r) => {
       const item = await r.item(id);

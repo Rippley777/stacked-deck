@@ -91,6 +91,18 @@ export const itemSchema = z
         message: 'System specifications belong to a complete computer.',
       });
   });
+export const systemWithComponentsSchema = z.object({
+  system: itemSchema.refine((item) => item.kind === 'System', 'Choose a complete computer.'),
+  components: z
+    .array(
+      itemSchema.refine(
+        (item) => item.kind === 'Component' && item.status === 'Available',
+        'New installed parts must be components with an Available base status.',
+      ),
+    )
+    .min(1)
+    .max(50),
+});
 export const requirementSchema = z
   .object({
     name: short.min(1),

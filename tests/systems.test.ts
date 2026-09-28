@@ -51,6 +51,77 @@ beforeEach(async () => {
 });
 afterEach(() => db.close());
 describe('complete computer catalog', () => {
+  it('creates a computer and its installed components together', async () => {
+    const added = await alice
+      .post('/api/inventory/systems')
+      .set(headers)
+      .send({
+        system: computer,
+        components: [ram, { ...ram, name: 'Archive drive', category: 'HDD', quantity: 1 }],
+      });
+    expect(added.status).toBe(201);
+    expect(added.body.components).toHaveLength(2);
+    expect(added.body.components.map((part: { quantity: number }) => part.quantity).sort()).toEqual(
+      [1, 3],
+    );
+    const inventory = (await alice.get('/api/inventory?kind=Component')).body.items;
+    expect(inventory).toHaveLength(2);
+    for (const part of inventory) {
+      expect(part.availableQuantity).toBe(0);
+      expect(part.installedIn[0].systemId).toBe(added.body.id);
+      expect((await bob.get(`/api/inventory/${part.id}`)).status).toBe(404);
+    }
+    expect((await alice.get(`/api/inventory/${added.body.id}`)).body.components).toHaveLength(2);
+  });
+  it('rolls back the entire computer when an installed component cannot be saved or linked', async () => {
+    const foreignLocation = (
+      await bob.post('/api/locations').set(headers).send({ name: 'Private shelf' })
+    ).body.id;
+    const response = await alice
+      .post('/api/inventory/systems')
+      .set(headers)
+      .send({
+        system: computer,
+        components: [ram, { ...ram, locationId: foreignLocation }],
+      });
+    expect(response.status).toBe(400);
+    expect((await alice.get('/api/inventory')).body.total).toBe(0);
+    const locked = await alice
+      .post('/api/inventory/systems')
+      .set(headers)
+      .send({
+        system: { ...computer, status: 'Archived' },
+        components: [ram],
+      });
+    expect(locked.status).toBe(409);
+    expect((await alice.get('/api/inventory')).body.total).toBe(0);
+  });
+  it('validates all new installed components before saving the computer', async () => {
+    for (const components of [
+      [{ ...ram, name: ' ' }],
+      [computer],
+      [{ ...ram, status: 'Sold' }],
+      [],
+    ]) {
+      expect(
+        (
+          await alice
+            .post('/api/inventory/systems')
+            .set(headers)
+            .send({ system: computer, components })
+        ).status,
+      ).toBe(400);
+    }
+    expect(
+      (
+        await alice
+          .post('/api/inventory/systems')
+          .set(headers)
+          .send({ system: ram, components: [ram] })
+      ).status,
+    ).toBe(400);
+    expect((await alice.get('/api/inventory')).body.total).toBe(0);
+  });
   it('stores specs, finds systems by specification, supports edits, and isolates accounts', async () => {
     const added = await alice.post('/api/inventory').set(headers).send(computer);
     expect(added.status).toBe(201);
