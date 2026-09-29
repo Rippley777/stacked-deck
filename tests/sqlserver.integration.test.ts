@@ -183,6 +183,20 @@ test.skipIf(!enabled)(
     ).toBe(409);
     expect((await alice.get('/api/recommendations')).body).toHaveLength(11);
     expect((await alice.get('/api/dashboard')).body.totalValueCents).toBe(19500);
+    expect((await alice.get('/api/portfolio/valuation')).body.totalValueCents).toBe(19500);
+    expect((await alice.get(`/api/inventory/${card.body.id}/valuations`)).body).toHaveLength(1);
+    expect((await bob.get(`/api/inventory/${card.body.id}/valuations`)).status).toBe(404);
+    const manual = await alice
+      .put(`/api/inventory/${card.body.id}/manual-value`)
+      .set(headers)
+      .send({ valueCents: 6000 });
+    expect(manual.status).toBe(200);
+    expect(manual.body.manualValueOverrideCents).toBe(6000);
+    expect((await alice.get('/api/portfolio/valuation-history')).body.at(-1).valueCents).toBe(
+      18000,
+    );
+    expect((await alice.get(`/api/inventory/${card.body.id}/valuations`)).body).toHaveLength(2);
+
     expect(
       (
         await alice

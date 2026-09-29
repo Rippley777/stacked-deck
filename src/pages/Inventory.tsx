@@ -1,3 +1,4 @@
+import { ItemValuation } from '../components/Valuation';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -113,12 +114,6 @@ export function ItemDetail({ id, onClose }: { id: string; onClose: () => void })
               </div>
               <div>
                 <dt>
-                  {i.kind === 'System' ? 'Current value of computer' : 'Current value per unit'}
-                </dt>
-                <dd>{i.estimatedValueCents == null ? '—' : money(i.estimatedValueCents, true)}</dd>
-              </div>
-              <div>
-                <dt>
                   {i.kind === 'System' ? 'Purchase price of computer' : 'Purchase price per unit'}
                 </dt>
                 <dd>{i.purchasePriceCents == null ? '—' : money(i.purchasePriceCents, true)}</dd>
@@ -136,6 +131,7 @@ export function ItemDetail({ id, onClose }: { id: string; onClose: () => void })
                 <dd>{date(i.createdAt)}</dd>
               </div>
             </dl>
+            <ItemValuation item={i} />
             {i.kind === 'System' && (
               <>
                 <ComputerSpecs item={i} />

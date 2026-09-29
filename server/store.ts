@@ -1,3 +1,4 @@
+import type { Valuation, ValuationRecord, PortfolioEvent } from '../shared/valuation.js';
 import type {
   User,
   Assignment,
@@ -9,6 +10,16 @@ import type {
 import type { ItemInput, ProjectInput } from '../shared/validation.js';
 export type Awaitable<T> = T | Promise<T>;
 export interface UserRepository {
+  valuations(id: string): Awaitable<ValuationRecord[]>;
+  proposeValuation(
+    id: string,
+    valuation: Valuation,
+    provider: string,
+    expectedFingerprint: string,
+  ): Awaitable<ValuationRecord>;
+  applyValuation(id: string, valuationId: string, replaceManual: boolean): Awaitable<InventoryItem>;
+  setManualValue(id: string, value: number | null): Awaitable<InventoryItem>;
+  portfolioEvents(): Awaitable<PortfolioEvent[]>;
   assignments(): Awaitable<Assignment[]>;
   inventory(): Awaitable<InventoryItem[]>;
   item(id: string): Awaitable<InventoryItem>;

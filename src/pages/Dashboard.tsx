@@ -1,3 +1,4 @@
+import { PortfolioPanel } from '../components/Portfolio';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -28,7 +29,7 @@ export default function DashboardPage() {
   const { user, revision, addItem } = useApp();
   const resource = useResource<Dashboard>('/dashboard', revision);
   const builds = useResource<Recommendation[]>('/recommendations', revision);
-  if (resource.loading) return <Loading />;
+  if (resource.loading && !resource.data) return <Loading />;
   if (resource.error || !resource.data)
     return <ErrorState message={resource.error} retry={resource.reload} />;
   const d = resource.data;
@@ -121,6 +122,7 @@ export default function DashboardPage() {
           </div>
         ))}
       </section>
+      <PortfolioPanel />
       <section className="dashboard-section">
         <div className="section-heading">
           <div>

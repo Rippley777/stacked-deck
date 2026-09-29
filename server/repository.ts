@@ -1,3 +1,12 @@
+import type { Valuation, ValuationRecord, PortfolioEvent } from '../shared/valuation.js';
+import {
+  decodeValuation,
+  valuationRecord,
+  valuationFingerprint,
+  itemValueFields,
+  type ValuationRow,
+} from './valuation-records.js';
+import { portfolioChanges } from './portfolio.js';
 import { randomUUID } from 'node:crypto';
 import type { DB } from './db.js';
 import type {
@@ -37,6 +46,123 @@ export class Repository {
     public db: DB,
     public userId: string,
   ) {}
+  private mutationDepth = 0;
+  private mutate<T>(callback: () => T): T {
+    if (this.mutationDepth) return callback();
+    return this.db
+      .transaction(() => {
+        const before = this.inventory();
+        this.mutationDepth++;
+        try {
+          const result = callback();
+          const createdAt = new Date().toISOString();
+          for (const event of portfolioChanges(before, this.inventory()))
+            this.db
+              .prepare(
+                'INSERT INTO portfolio_value_events(userId,itemId,valueCents,createdAt) VALUES (?,?,?,?)',
+              )
+              .run(this.userId, event.itemId, event.valueCents, createdAt);
+          return result;
+        } finally {
+          this.mutationDepth--;
+        }
+      })
+      .immediate();
+  }
+  portfolioEvents(): PortfolioEvent[] {
+    return this.db
+      .prepare(
+        'SELECT sequence,itemId,valueCents,createdAt FROM portfolio_value_events WHERE userId=? ORDER BY sequence',
+      )
+      .all(this.userId) as PortfolioEvent[];
+  }
+  valuations(id: string): ValuationRecord[] {
+    this.item(id);
+    return (
+      this.db
+        .prepare(
+          'SELECT * FROM equipment_valuations WHERE userId=? AND itemId=? ORDER BY createdAt,id',
+        )
+        .all(this.userId, id) as ValuationRow[]
+    ).map(decodeValuation);
+  }
+  private insertValuation(record: ValuationRecord) {
+    this.db
+      .prepare(
+        'INSERT INTO equipment_valuations(id,userId,itemId,valuation,effectiveValueCents,source,provider,inputFingerprint,createdAt,appliedAt) VALUES (@id,@userId,@itemId,@valuation,@effectiveValueCents,@source,@provider,@inputFingerprint,@createdAt,@appliedAt)',
+      )
+      .run({
+        ...record,
+        userId: this.userId,
+        valuation: record.valuation ? JSON.stringify(record.valuation) : null,
+      });
+  }
+  proposeValuation(
+    id: string,
+    valuation: Valuation,
+    provider: string,
+    expectedFingerprint: string,
+  ) {
+    return this.mutate(() => {
+      const item = this.item(id);
+      const record = {
+        ...valuationRecord(id, valuation, null, 'ai', provider, false),
+        inputFingerprint: valuationFingerprint(item, this.inventory()),
+      };
+      if (record.inputFingerprint !== expectedFingerprint)
+        throw new AppError(
+          409,
+          'Hardware changed while estimating. Review its details and try again.',
+        );
+      this.insertValuation(record);
+      return record;
+    });
+  }
+  applyValuation(id: string, valuationId: string, replaceManual: boolean) {
+    return this.mutate(() => {
+      const item = this.item(id);
+      const record = this.valuations(id).find((v) => v.id === valuationId);
+      if (!record?.valuation) throw new AppError(404, 'Valuation not found.');
+      if (record.appliedAt) return item; // Retry-safe acceptance.
+      if (
+        record.createdAt < item.updatedAt ||
+        record.inputFingerprint !== valuationFingerprint(item, this.inventory())
+      )
+        throw new AppError(
+          409,
+          'Hardware changed since this estimate. Refresh the valuation before applying it.',
+        );
+      const manual = replaceManual ? null : item.manualValueOverrideCents;
+      const value = manual ?? record.valuation.estimatedValueCents;
+      const now = new Date().toISOString();
+      this.db
+        .prepare(
+          'UPDATE inventory_items SET aiValuation=?,manualValueOverrideCents=?,estimatedValueCents=?,valuationUpdatedAt=?,updatedAt=? WHERE userId=? AND id=?',
+        )
+        .run(JSON.stringify(record.valuation), manual, value, now, now, this.userId, id);
+      this.db
+        .prepare(
+          'UPDATE equipment_valuations SET appliedAt=?,effectiveValueCents=? WHERE userId=? AND itemId=? AND id=?',
+        )
+        .run(now, value, this.userId, id, valuationId);
+      return this.item(id);
+    });
+  }
+  setManualValue(id: string, value: number | null) {
+    return this.mutate(() => {
+      const item = this.item(id);
+      const effective = value ?? item.aiValuation?.estimatedValueCents ?? null;
+      const now = new Date().toISOString();
+      if (value === item.manualValueOverrideCents) return item;
+      this.db
+        .prepare(
+          'UPDATE inventory_items SET manualValueOverrideCents=?,estimatedValueCents=?,valuationUpdatedAt=?,updatedAt=? WHERE userId=? AND id=?',
+        )
+        .run(value, effective, now, now, this.userId, id);
+      this.insertValuation(valuationRecord(id, item.aiValuation, effective, 'manual', 'user'));
+      return this.item(id);
+    });
+  }
   assignments(): Assignment[] {
     return this.db
       .prepare(
@@ -68,8 +194,9 @@ export class Repository {
     return item;
   }
   saveItem(input: ItemInput, id: string = randomUUID(), update = false) {
-    return this.db.transaction(() => {
-      if (update) assertItemUpdate(this.item(id), input);
+    return this.mutate(() => {
+      const previous = update ? this.item(id) : undefined;
+      if (previous) assertItemUpdate(previous, input);
       if (
         input.locationId &&
         !this.db
@@ -80,8 +207,15 @@ export class Repository {
       this.db
         .prepare('INSERT OR IGNORE INTO categories(userId,name) VALUES (?,?)')
         .run(this.userId, input.category);
-      const { tags, systemSpecs, ...rest } = input;
-      const fields = { ...rest, systemSpecs: systemSpecs ? JSON.stringify(systemSpecs) : null };
+      const { tags, systemSpecs, initialValuation: _initial, ...rest } = input;
+      void _initial;
+      const { record, aiValuation, ...valueFields } = itemValueFields(input, previous);
+      const fields = {
+        ...rest,
+        ...valueFields,
+        aiValuation: aiValuation ? JSON.stringify(aiValuation) : null,
+        systemSpecs: systemSpecs ? JSON.stringify(systemSpecs) : null,
+      };
       const keys = Object.keys(fields);
       if (update)
         this.db
@@ -104,29 +238,30 @@ export class Repository {
           .prepare('INSERT INTO item_tags(userId,itemId,tag) VALUES (?,?,?)')
           .run(this.userId, id, tag);
       }
+      if (record) this.insertValuation({ ...record, itemId: id });
       return this.item(id);
-    })();
+    });
   }
   createSystem(input: ItemInput, components: ItemInput[]) {
-    return this.db
-      .transaction(() => {
-        const system = this.saveItem(input);
-        for (const component of components) {
-          const part = this.saveItem(component);
-          this.install(system.id, part.id, part.quantity);
-        }
-        return this.item(system.id);
-      })
-      .immediate();
+    return this.mutate(() => {
+      const system = this.saveItem(input);
+      for (const component of components) {
+        const part = this.saveItem(component);
+        this.install(system.id, part.id, part.quantity);
+      }
+      return this.item(system.id);
+    });
   }
   deleteItem(id: string) {
-    const item = this.item(id);
-    if (item.assignments.length || item.installedIn.length)
-      throw new AppError(
-        409,
-        'Release this hardware from projects and computers before deleting it.',
-      );
-    this.db.prepare('DELETE FROM inventory_items WHERE id=? AND userId=?').run(id, this.userId);
+    this.mutate(() => {
+      const item = this.item(id);
+      if (item.assignments.length || item.installedIn.length)
+        throw new AppError(
+          409,
+          'Release this hardware from projects and computers before deleting it.',
+        );
+      this.db.prepare('DELETE FROM inventory_items WHERE id=? AND userId=?').run(id, this.userId);
+    });
   }
   locations(): Location[] {
     return this.db
@@ -257,28 +392,24 @@ export class Repository {
     if (!result.changes) throw new AppError(404, 'Assignment not found.');
   }
   install(systemId: string, itemId: string, quantity: number) {
-    return this.db
-      .transaction(() => {
-        assertInstall(this.item(systemId), this.item(itemId), quantity);
-        this.db
-          .prepare(
-            'INSERT INTO system_components(id,userId,systemId,itemId,quantity) VALUES (?,?,?,?,?) ON CONFLICT(systemId,itemId) DO UPDATE SET quantity=quantity+excluded.quantity',
-          )
-          .run(randomUUID(), this.userId, systemId, itemId, quantity);
-        return this.item(systemId);
-      })
-      .immediate();
+    return this.mutate(() => {
+      assertInstall(this.item(systemId), this.item(itemId), quantity);
+      this.db
+        .prepare(
+          'INSERT INTO system_components(id,userId,systemId,itemId,quantity) VALUES (?,?,?,?,?) ON CONFLICT(systemId,itemId) DO UPDATE SET quantity=quantity+excluded.quantity',
+        )
+        .run(randomUUID(), this.userId, systemId, itemId, quantity);
+      return this.item(systemId);
+    });
   }
   uninstall(systemId: string, componentId: string) {
-    this.db
-      .transaction(() => {
-        assertEditableSystem(this.item(systemId));
-        const result = this.db
-          .prepare('DELETE FROM system_components WHERE id=? AND systemId=? AND userId=?')
-          .run(componentId, systemId, this.userId);
-        if (!result.changes) throw new AppError(404, 'Installed part not found.');
-      })
-      .immediate();
+    this.mutate(() => {
+      assertEditableSystem(this.item(systemId));
+      const result = this.db
+        .prepare('DELETE FROM system_components WHERE id=? AND systemId=? AND userId=?')
+        .run(componentId, systemId, this.userId);
+      if (!result.changes) throw new AppError(404, 'Installed part not found.');
+    });
   }
   templates(): ProjectTemplate[] {
     return (

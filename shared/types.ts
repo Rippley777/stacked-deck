@@ -1,3 +1,4 @@
+import type { Valuation } from './valuation.js';
 export const itemStatuses = [
   'Available',
   'In Use',
@@ -109,6 +110,9 @@ export interface InventoryItem {
   purchasePriceCents: number | null;
   purchaseDate: string | null;
   estimatedValueCents: number | null;
+  aiValuation: Valuation | null;
+  manualValueOverrideCents: number | null;
+  valuationUpdatedAt: string | null;
   serialNumber: string;
   tags: string[];
   imageUrl: string;

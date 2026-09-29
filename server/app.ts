@@ -1,3 +1,4 @@
+import { valuationFingerprint } from './valuation-records.js';
 import express from 'express';
 import type { ErrorRequestHandler, Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
@@ -7,7 +8,10 @@ import { isIP } from 'node:net';
 import { resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
+import { aiValuationService } from './valuation.js';
+import { summarizePortfolio } from './portfolio.js';
+import { centsSchema, valuationLimits } from '../shared/valuation.js';
 import type { DB } from './db.js';
 import type { Dashboard, User } from '../shared/types.js';
 import {
@@ -32,6 +36,7 @@ import type { AppStore, UserRepository } from './store.js';
 import { recommend, evaluateTemplate } from './compatibility.js';
 import { AppError } from './errors.js';
 import { inventoryValue } from './inventory.js';
+import { identifyHardware, scanConfigured, scanImage } from './hardware-scan.js';
 interface Options {
   production?: boolean;
   origin?: string;
@@ -57,7 +62,7 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
       contentSecurityPolicy: production
         ? {
             directives: {
-              imgSrc: ["'self'", 'https:', 'http:', 'data:'],
+              imgSrc: ["'self'", 'https:', 'http:', 'data:', 'blob:'],
               upgradeInsecureRequests: [],
             },
           }
@@ -65,7 +70,10 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
       strictTransportSecurity: production ? undefined : false,
     }),
   );
-  app.use(express.json({ limit: '128kb' }));
+  const json = express.json({ limit: '128kb' });
+  app.use((req, res, next) =>
+    req.path === '/api/hardware/scan' && req.method === 'POST' ? next() : json(req, res, next),
+  );
   app.use(cookieParser());
   app.use('/api', (_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -132,6 +140,127 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
     next();
   });
   const repo = (res: Response) => res.locals.repo as UserRepository;
+  app.get('/api/hardware/scan', (_req, res) => res.json({ enabled: scanConfigured() }));
+  app.post(
+    '/api/hardware/scan',
+    rateLimit({
+      windowMs: 60 * 60 * 1000,
+      limit: 20,
+      keyGenerator: (_req, res) => (res.locals.user as User).id,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      message: { error: 'You have reached 20 scans this hour. Try again later.' },
+    }),
+    express.json({ limit: '6mb' }),
+    async (req, res) => {
+      res.json(await identifyHardware(scanImage(req.body)));
+    },
+  );
+  const valuationLimit = rateLimit({
+    windowMs: valuationLimits.windowMs,
+    limit: valuationLimits.requestsPerHour,
+    keyGenerator: (_req, res) => (res.locals.user as User).id,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: 'You have reached 20 valuations this hour. Try again later.' },
+  });
+  const activeValuations = new Set<string>();
+  async function valuationRequest<T>(
+    res: Response,
+    key: string,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const owner = (res.locals.user as User).id;
+    const lock = `${owner}:${key}`;
+    if (activeValuations.has(lock))
+      throw new AppError(409, 'A valuation is already being generated. Please wait.');
+    activeValuations.add(lock);
+    try {
+      return await run();
+    } finally {
+      activeValuations.delete(lock);
+    }
+  }
+  app.post('/api/hardware/valuation', valuationLimit, async (req, res) => {
+    const input = itemSchema.parse(req.body);
+    res.json(
+      await valuationRequest(res, 'draft', () => aiValuationService.estimateEquipmentValue(input)),
+    );
+  });
+  app.get('/api/inventory/:id/valuations', async (req, res) => {
+    res.json(await repo(res).valuations(String(req.params.id)));
+  });
+  app.post('/api/inventory/:id/valuation', valuationLimit, async (req, res) => {
+    const r = repo(res);
+    const id = String(req.params.id);
+    res.json(
+      await valuationRequest(res, id, async () => {
+        const inventory = await r.inventory();
+        const item = inventory.find((i) => i.id === id);
+        if (!item) throw new AppError(404, 'Hardware not found.');
+        const fingerprint = valuationFingerprint(item, inventory);
+        const recent = (await r.valuations(id)).filter((v) => v.source === 'ai').at(-1);
+        if (recent && Date.now() - Date.parse(recent.createdAt) < valuationLimits.cooldownMs)
+          throw new AppError(
+            429,
+            'An estimate was generated recently. Review it in valuation history or wait one minute before refreshing.',
+          );
+        const input = itemSchema.parse(item);
+        if (item.components.length) {
+          const parts = new Map(inventory.map((i) => [i.id, i]));
+          input.notes +=
+            '\nInstalled parts: ' +
+            JSON.stringify(
+              item.components.map((c) => {
+                const part = parts.get(c.itemId)!;
+                return {
+                  name: part.name,
+                  manufacturer: part.manufacturer,
+                  model: part.model,
+                  category: part.category,
+                  condition: part.condition,
+                  quantity: c.quantity,
+                  specifications: part.notes,
+                };
+              }),
+            );
+        }
+        const result = await aiValuationService.estimateEquipmentValue(input);
+        // A concurrent edit makes the result unsuitable for the current hardware.
+        if (JSON.stringify(await r.item(id)) !== JSON.stringify(item))
+          throw new AppError(
+            409,
+            'Hardware changed while estimating. Review its details and try again.',
+          );
+        return {
+          ...result,
+          record: result.valuation
+            ? await r.proposeValuation(id, result.valuation, result.provider, fingerprint)
+            : null,
+        };
+      }),
+    );
+  });
+  app.put('/api/inventory/:id/valuation', async (req, res) => {
+    const data = z
+      .object({ valuationId: z.string().min(1).max(80), replaceManual: z.boolean().default(false) })
+      .parse(req.body);
+    res.json(
+      await repo(res).applyValuation(String(req.params.id), data.valuationId, data.replaceManual),
+    );
+  });
+  app.put('/api/inventory/:id/manual-value', async (req, res) => {
+    const data = z.object({ valueCents: centsSchema.nullable() }).parse(req.body);
+    res.json(await repo(res).setManualValue(String(req.params.id), data.valueCents));
+  });
+  app.get('/api/portfolio/valuation', async (_req, res) => {
+    const r = repo(res);
+    res.json(summarizePortfolio(await r.inventory(), await r.portfolioEvents()));
+  });
+  app.get('/api/portfolio/valuation-history', async (_req, res) => {
+    const r = repo(res);
+    res.json(summarizePortfolio(await r.inventory(), await r.portfolioEvents()).history);
+  });
   app.get('/api/auth/me', async (_req, res) => res.json(res.locals.user));
   app.get('/api/meta', async (_req, res) =>
     res.json({

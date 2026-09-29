@@ -59,7 +59,9 @@ test('create a computer with multiple installed components and remove an unfinis
   await expect(dialog.getByRole('link', { name: 'Spare SSD', exact: true })).toBeVisible();
   await dialog.getByRole('link', { name: 'Spare SSD', exact: true }).click();
   await expect(dialog.getByText('SSD-002', { exact: true })).toBeVisible();
-  await expect(dialog.getByText('$49.99', { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByLabel('Equipment valuation').getByRole('definition').filter({ hasText: '$49.99' }),
+  ).toBeVisible();
   await expect(dialog.getByText('2 total · 0 available', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('link', { name: /Storage workstation/ })).toBeVisible();
 });

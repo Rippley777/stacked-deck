@@ -1,11 +1,15 @@
+import type { Valuation } from '../../shared/valuation';
+import { ValuationSummary } from './Valuation';
 import type { Dispatch, SetStateAction } from 'react';
 import { Trash2 } from 'lucide-react';
-import type { Location } from '../../shared/types';
+import type { InventoryItem, Location } from '../../shared/types';
 import { ItemFields } from './ItemFields';
 
 export interface ComponentDraft {
   id: string;
   active: boolean;
+  initialValues?: Partial<InventoryItem>;
+  initialValuation?: Valuation | null;
 }
 
 export function AdditionalComponents({
@@ -60,7 +64,26 @@ export function AdditionalComponents({
           {!component.active && (
             <p className="muted small-text">Optional. Enter a name to add its details.</p>
           )}
+          {component.initialValuation && (
+            <>
+              <ValuationSummary value={component.initialValuation} />
+              <button
+                type="button"
+                className="button ghost"
+                onClick={() =>
+                  setComponents((rows) =>
+                    rows.map((row) =>
+                      row.id === component.id ? { ...row, initialValuation: null } : row,
+                    ),
+                  )
+                }
+              >
+                Discard AI estimate
+              </button>
+            </>
+          )}
           <ItemFields
+            item={component.initialValues}
             isSystem={false}
             installed
             meta={meta}

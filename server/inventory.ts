@@ -1,10 +1,17 @@
+import { contributions } from './portfolio.js';
 import type { Assignment, InventoryItem, SystemComponent } from '../shared/types.js';
 import type { ItemInput } from '../shared/validation.js';
 import { AppError } from './errors.js';
 export type InventoryRow = Omit<
   InventoryItem,
-  'systemSpecs' | 'tags' | 'assignments' | 'components' | 'installedIn' | 'availableQuantity'
-> & { systemSpecs: string | null };
+  | 'aiValuation'
+  | 'systemSpecs'
+  | 'tags'
+  | 'assignments'
+  | 'components'
+  | 'installedIn'
+  | 'availableQuantity'
+> & { systemSpecs: string | null; aiValuation: string | null };
 export function hydrateInventory(
   items: InventoryRow[],
   assignments: Assignment[],
@@ -16,6 +23,7 @@ export function hydrateInventory(
     const installedIn = components.filter((c) => c.itemId === item.id);
     return {
       ...item,
+      aiValuation: item.aiValuation ? JSON.parse(item.aiValuation) : null,
       systemSpecs: item.systemSpecs ? JSON.parse(item.systemSpecs) : null,
       tags: tags.filter((t) => t.itemId === item.id).map((t) => t.tag),
       assignments: assigned,
@@ -73,16 +81,8 @@ export function assertInstall(system: InventoryItem, component: InventoryItem, q
 // A whole-computer valuation replaces the value of its linked parts. If unset,
 // the computer's value falls back to the sum of those parts.
 export function inventoryValue(items: InventoryItem[], allItems = items) {
-  const lookup = new Map(allItems.map((i) => [i.id, i]));
-  return items.reduce((total, item) => {
-    const loose = item.quantity - item.installedIn.reduce((n, c) => n + c.quantity, 0);
-    const value =
-      item.kind === 'System' && item.estimatedValueCents === null
-        ? item.components.reduce(
-            (n, c) => n + (lookup.get(c.itemId)?.estimatedValueCents || 0) * c.quantity,
-            0,
-          )
-        : item.estimatedValueCents || 0;
-    return total + value * loose;
-  }, 0);
+  const ids = new Set(items.map((i) => i.id));
+  return contributions(allItems)
+    .filter((i) => ids.has(i.id))
+    .reduce((n, i) => n + i.valueCents, 0);
 }

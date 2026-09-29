@@ -29,14 +29,68 @@ npm run db:seed
 
 Sign in with `SEED_EMAIL` (default `demo@stackeddeck.local`) and your `SEED_PASSWORD`. Seeding never overwrites an existing account. The seed includes 16 hardware cards / 36 physical components, four locations, two projects, and all 11 templates. It includes the specified Raspberry Pis, NVIDIA GPUs (including an unavailable integrated laptop GPU), storage drives, networking, adapters, and microcontrollers. Never enable demo credentials on a public production deployment.
 
+## AI hardware photos
+
+Add `OPENAI_API_KEY` to your local `.env` or your deployment's server environment, then restart the app. Optionally set `OPENAI_VISION_MODEL` (default: `gpt-4.1-mini`). Keep the key on the server; do not prefix it with `VITE_`. API usage is billed to the configured OpenAI account. Without a key, manual inventory entry still works and the scan panel explains the missing setup.
+
+In **Add hardware** or **Add computer**, choose **Take photo** (opens the camera on supported mobile browsers) or **Upload photo**, then **Scan photo**. Review the evidence, uncertainty, model and serial number. Choose **Use these details** to fill the main form, or **Add installed component** to add a detected part to the computer being created. Correct any mistakes before saving. Scanning alone creates no inventory records. Closed cases and unreadable labels cannot reliably reveal internal specifications.
+
+JPEG, PNG and WebP uploads up to 20 MB are resized to at most 2048 pixels on their longest side and re-encoded as JPEG in the browser, omitting original EXIF metadata. The scan endpoint accepts images up to 4 MB and limits each signed-in user to 20 requests per hour per server process. Photos are sent to OpenAI only when Scan photo is pressed; Stacked Deck does not persist them. Requests use `store: false`. The integration uses the [Responses image input API](https://developers.openai.com/api/docs/guides/images-vision) with [structured output](https://developers.openai.com/api/docs/guides/structured-outputs), and validates suggestions before returning them.
+
+Automated tests mock the AI provider and cover upload/review/save, installed parts, authentication, validation, limits, timeouts and failures. Live identification quality requires testing with your own API key and representative hardware photos.
+
+If scanning returns a 429 error, the app distinguishes exhausted API credits, organization/project spend limits, approved usage limits and temporary rate limits. For exhausted credits, add credits in the [API billing settings](https://platform.openai.com/settings/organization/billing/overview) for the organization associated with your key. Billing and quota errors require credits or limit changes; repeated retries do not restore access. Temporary rate limits require spacing out scans. See the [OpenAI error guide](https://developers.openai.com/api/docs/guides/error-codes).
+
+## Equipment valuations and portfolio
+
+Photo scans now identify hardware **and propose an initial per-unit USD resale estimate in one request**. Review the range, confidence and explanation before using the suggestion. A low-confidence identification receives no price. Unusable valuation output is discarded without discarding valid identification. Manual entry also has an optional **Estimate value** action after entering the model, condition and specifications. AI failure never prevents saving equipment manually.
+
+On a hardware detail screen, **Refresh valuation** generates a pending estimate. **Apply estimate** saves it as the current AI value. Refreshing alone never replaces the current value. Pending estimates remain available under valuation history. A changed model, condition, or installed component invalidates an older proposal. A saved manual value always takes priority, including `$0`; replacing it requires explicitly checking the replacement option. Clearing the manual override restores the latest accepted AI estimate, or leaves the item unvalued if none exists. Ordinary metadata edits preserve the value's source. Values and purchase prices remain per unit.
+
+The dashboard shows current value, known purchase spend, dollar/percentage change, category values, the most valuable holding, and historical collection value. Missing values contribute zero to totals; coverage counts and a separate comparison of holdings with both prices prevent interpreting missing purchase prices as profit. Complete computers and their installed parts are counted once, using whole-computer prices when supplied and known part prices otherwise. Sold/Archived holdings are excluded. **Value my collection** opens a list of unpriced cards to work through individually; it never starts a bulk background job.
+
+### Provider and limits
+
+- Uses the existing server-only `OPENAI_API_KEY`. `OPENAI_VALUATION_MODEL` optionally selects the independent valuation model; it defaults to `OPENAI_VISION_MODEL`, then `gpt-4.1-mini`. Combined photo identification/valuation always uses `OPENAI_VISION_MODEL`.
+- `server/valuation.ts` exposes `ValuationService.estimateEquipmentValue`, separate from transport and photo identification. The shared prompt considers known model/specifications, condition, age, purchase information, accessories in notes, and installed parts for saved computers. Notes and labels are treated as untrusted data.
+- Requests use [Responses structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs) and `store: false`. Zod additionally validates currency, integer cents, finite nonnegative prices, confidence, explanation length and ordered ranges.
+- The initial provider has **no live marketplace comparables**. It must not claim recent sales or cite fabricated listings. Confidence is capped at medium; photo estimates assume untested used condition unless confirmed later. These are editable estimates, not appraisals or guaranteed sale prices.
+- A request times out after 45 seconds. Independent valuations are limited to 20 attempts per signed-in user per hour, with one in-flight request per item and a one-minute cooldown after a saved AI proposal. Photo scans retain their separate 20/hour allowance. Controls are centralized in `shared/valuation.ts`; seven days marks a stale value in the UI, not an automatic refresh schedule. The rate limiter/in-flight guard are process-local, consistent with the current single-instance setup.
+- Equipment details are sent only when the user requests a valuation. The independent provider omits serial numbers, image URLs, location and existing estimates. No scraping or marketplace API calls are implemented. Automated tests mock the provider and never make paid requests.
+
+### Storage and historical semantics
+
+Migration `003_valuations.sql` exists for both SQLite and Azure SQL. Startup applies it using the existing migration runner. It adds `aiValuation` (validated JSON), `manualValueOverrideCents` and `valuationUpdatedAt` to inventory; `estimatedValueCents` remains the effective current-value field for existing clients. Existing values become manual overrides, with baseline history dated at migration time, not retroactively at purchase time.
+
+`equipment_valuations` stores each successful AI refresh, its model/provider, range, confidence, explanation, server timestamp, input fingerprint and optional application timestamp/effective value. A pending proposal does not affect totals. Accepting it is retry-safe; older records remain. Manual changes also append records. Owner/item composite foreign keys and an owner/item/date index follow existing repository conventions. Deleting hardware cascades its detailed valuation records.
+
+`portfolio_value_events` stores only **changed per-item contributions**, in the same transaction as equipment/value/composition mutations. It is not a table of aggregate snapshots. Valuation records alone cannot reconstruct historical quantities, installations, archives or deletions; this small event ledger preserves those effects without copying entire portfolios. Historical item identifiers intentionally survive card deletion; events remain owner-scoped and cascade on user deletion. The migration records the starting holdings, and subsequent events never rewrite that baseline.
+
+Portfolio history makes one ordered pass over the owner's indexed event stream, carries recorded values forward, and returns the last total for each UTC day with activity plus today's total. The lightweight SVG step charts include an accessible value table and add no chart dependency. No values are fabricated before tracking starts. Collection changes affect the chart, so it is **not a time-weighted investment return**. For very long histories, range queries with a SQL opening balance and monthly sampling can replace the in-memory pass without changing the event model.
+
+Authenticated operations follow the existing `/api` conventions:
+
+| Operation                                 | Route                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| Preview an unsaved item                   | `POST /api/hardware/valuation`                                                  |
+| Generate and retain a pending estimate    | `POST /api/inventory/:id/valuation`                                             |
+| Apply a reviewed estimate                 | `PUT /api/inventory/:id/valuation` with `valuationId`, optional `replaceManual` |
+| Set/clear a manual override               | `PUT /api/inventory/:id/manual-value` with nullable `valueCents`                |
+| Item history, including pending estimates | `GET /api/inventory/:id/valuations`                                             |
+| Totals, breakdown and history             | `GET /api/portfolio/valuation`                                                  |
+| Historical total values                   | `GET /api/portfolio/valuation-history`                                          |
+
+Next accuracy improvements: add authorized sold-listing APIs through the provider interface, normalize exact SKUs/specifications and condition, record comparable sale dates/locations, and calibrate ranges against actual sales. Multi-currency conversion, automated refresh scheduling and realized sale proceeds are not part of this first version.
+
 ## What works
 
 - Account creation, sign in/out, protected API routes, private per-user workspaces, persistent 30-day sessions.
 - Inventory creation, details, edits, archive/restore and deletion. Quantities, condition, base status, manufacturer, model, per-unit purchase/current values, purchase date, serial, notes, tags and optional image URL.
 - Complete computer catalog: desktops, laptops, mini PCs, servers and all-in-ones; prebuilt/custom build origin; processor, graphics, RAM, storage, motherboard, power supply and OS specifications. When creating a computer, enter installed components directly: each component name reveals another optional input below. The computer and its new parts save together, with all entered quantities installed. Existing parts can also be linked from your deck with quantity limits and cannot be double-booked for projects.
+- AI photo identification: take a photo on a supported phone or upload an image in Add hardware / Add computer. Scan visible hardware and labels, review the suggestions, then fill a hardware form or add installed components before saving.
 - Custom categories and tags. Search across names, manufacturer, model, serial, notes and tags. Category, status, location and tag filters, paging, grid/list views.
 - Location management with descriptive paths such as `Office → Shelf → Bin 3`. Deleting a location clears the location reference without deleting its hardware.
-- Dashboard with physical quantities, availability, assigned units, value, recent additions, categories, status breakdown and recommendations.
+- Dashboard with physical quantities, availability, assigned units, a valuation portfolio with historical charts and category values, recent additions, status breakdown and recommendations.
 - Project CRUD, statuses, descriptions, notes, cost estimates, required/optional components and a live compatibility checklist.
 - Explicit, quantity-based inventory assignments. A project displays its hardware; each hardware card links back to its projects. Transactional allocation prevents overbooking.
 - Eleven shared templates: NAS, Pi-hole, RetroPie-style gaming, home server, Home Assistant, media server, Minecraft server, Pi cluster, network monitoring, development server and local AI workstation.
@@ -182,7 +236,7 @@ Use a **new destination filename** for each backup. Store encrypted copies off-h
 
 ### Current boundaries
 
-Readiness is a category/tag check, **not proof of electrical or software compatibility**. Templates cannot yet validate wattage, physical fit, interfaces, minimum RAM/VRAM, drive connectivity counts, or exact software support. Costs are rough editable USD estimates, not live prices. Photo URLs are displayed directly; image uploads and automated recognition are not included. Images contact the supplied external host (without a referrer). Artwork without a photo is illustrative by category.
+Readiness is a category/tag check, **not proof of electrical or software compatibility**. Templates cannot yet validate wattage, physical fit, interfaces, minimum RAM/VRAM, drive connectivity counts, or exact software support. Costs are rough editable USD estimates, not live prices. Photo URLs are displayed directly; uploaded scan images are analyzed but not persisted. Images contact the supplied external host (without a referrer). Artwork without a photo is illustrative by category.
 
 Authentication has rate limiting, generic login failures, scrypt, secure production cookies, same-origin write checks and JSON/custom-header CSRF protection. Email verification, recovery, MFA, OAuth, account deletion and session management screens are not part of this MVP. Public self-registration is enabled. Decide on registration policy and implement email recovery before opening a broad public service. The auth limiter is process-local, consistent with the single-instance deployment.
 

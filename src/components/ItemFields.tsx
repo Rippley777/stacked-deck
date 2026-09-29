@@ -13,7 +13,7 @@ export function ItemFields({
   showDetails = true,
   installed = false,
 }: {
-  item?: InventoryItem;
+  item?: Partial<InventoryItem>;
   isSystem: boolean;
   meta: { categories: string[]; locations: Location[] };
   prefix?: string;
@@ -119,7 +119,7 @@ export function ItemFields({
             <Field
               label="Base status"
               hint={
-                item?.assignments.length
+                item?.assignments?.length
                   ? 'Assignments control reserved and in-use units.'
                   : undefined
               }
@@ -147,7 +147,7 @@ export function ItemFields({
           <Field label="Tags" hint="Separate tags with commas.">
             <input
               name={`${prefix}tags`}
-              defaultValue={item?.tags.join(', ')}
+              defaultValue={item?.tags?.join(', ')}
               placeholder="homelab, arm64, spare"
             />
           </Field>
@@ -156,7 +156,7 @@ export function ItemFields({
             hint={
               isSystem
                 ? 'Includes linked parts. Leave blank to use their combined value.'
-                : undefined
+                : 'A manual value takes priority over AI estimates. Leave blank to use an accepted AI estimate.'
             }
           >
             <input

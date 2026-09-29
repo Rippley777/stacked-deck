@@ -8,6 +8,9 @@ services:
       APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to your HTTPS URL}
       DATABASE_PATH: /app/data/stacked-deck.db
       TRUST_PROXY: 1
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-gpt-4.1-mini}
+      OPENAI_VALUATION_MODEL: ${OPENAI_VALUATION_MODEL:-}
     ports:
       - '127.0.0.1:3001:3001'
     volumes:

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { valuationSchema } from './valuation.js';
 import {
   buildTypes,
   conditions,
@@ -35,6 +36,7 @@ export const systemSpecsSchema = z.object({
 });
 export const itemSchema = z
   .object({
+    initialValuation: valuationSchema.nullable().optional(),
     kind: z.enum(['Component', 'System']).default('Component'),
     systemSpecs: systemSpecsSchema.nullable().default(null),
     name: short.min(1),
