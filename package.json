@@ -26,6 +26,7 @@
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
     "@fontsource/manrope": "^5.3.0",
+    "@house-edge/analytics": "file:vendor/house-edge-analytics-0.1.1.tgz",
     "better-sqlite3": "^13.0.3",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",

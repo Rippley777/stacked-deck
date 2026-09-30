@@ -62,6 +62,19 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
           .slice(0, 16)
       : undefined;
   const origin = options.origin || 'http://localhost:5173';
+  const analyticsOrigins: string[] = [];
+  try {
+    const endpoint = new URL(process.env.VITE_HOUSE_EDGE_ENDPOINT || '');
+    if (
+      ['https:', 'http:'].includes(endpoint.protocol) &&
+      !endpoint.username &&
+      !endpoint.password
+    ) {
+      analyticsOrigins.push(endpoint.origin);
+    }
+  } catch {
+    /* Unconfigured analytics needs no additional CSP origin. */
+  }
   const app = express();
   app.disable('x-powered-by');
   if (options.trustProxy) app.set('trust proxy', options.trustProxy);
@@ -70,6 +83,7 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
       contentSecurityPolicy: production
         ? {
             directives: {
+              connectSrc: ["'self'", ...analyticsOrigins],
               imgSrc: ["'self'", 'https:', 'http:', 'data:', 'blob:'],
               upgradeInsecureRequests: [],
             },

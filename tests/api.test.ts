@@ -277,6 +277,30 @@ describe('authenticated core loop', () => {
 });
 
 describe('production and reservation invariants', () => {
+  it('allows the configured House Edge collector in the production CSP', async () => {
+    const previous = process.env.VITE_HOUSE_EDGE_ENDPOINT;
+    const localDb = openDatabase(':memory:');
+    try {
+      process.env.VITE_HOUSE_EDGE_ENDPOINT = 'https://analytics.example.com/api/collect';
+      const response = await request(createApp(localDb, { production: true })).get('/api/health');
+      expect(response.headers['content-security-policy'].split(';')).toContain(
+        "connect-src 'self' https://analytics.example.com",
+      );
+      expect(response.headers['content-security-policy']).toContain("script-src 'self'");
+      process.env.VITE_HOUSE_EDGE_ENDPOINT = 'invalid';
+      const unconfigured = await request(createApp(localDb, { production: true })).get(
+        '/api/health',
+      );
+      expect(unconfigured.headers['content-security-policy'].split(';')).toContain(
+        "connect-src 'self'",
+      );
+    } finally {
+      if (previous === undefined) delete process.env.VITE_HOUSE_EDGE_ENDPOINT;
+      else process.env.VITE_HOUSE_EDGE_ENDPOINT = previous;
+      localDb.close();
+    }
+  });
+
   it('sets Secure cookies and security headers in production', async () => {
     const localDb = openDatabase(':memory:');
     try {
