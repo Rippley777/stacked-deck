@@ -1,302 +1,645 @@
-# Stacked Deck
+<div align="center">
 
-**Know what you own. Find what you can build.**
+# 🂡 Stacked Deck
 
-A deployable personal hardware inventory and project workspace. A dark interface, a quiet card-deck motif, and a practical loop: **add hardware → organize it → choose a project → check your parts → reserve hardware**.
+### **Know what you own. Know what it's worth. Know what you can build.**
 
-![Stacked Deck dashboard](docs/screenshots/dashboard.png)
+**A hardware inventory, build planner, and AI-powered gear tracker for people who have absolutely no idea which drawer they put that one adapter in.**
 
-## Run locally
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Express](https://img.shields.io/badge/Express-5-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-Local_First-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-AI_Scanning-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
 
-Use **Node 24 LTS** (Node 22.12+ is supported). The repository includes `.nvmrc`.
+<br />
 
-```sh
-nvm install
-nvm use
+<img src="docs/screenshots/dashboard.png" alt="Stacked Deck Dashboard" width="900" />
+
+<br />
+
+**Inventory it. Scan it. Value it. Build with it.**
+
+</div>
+
+---
+
+## ♠️ What is Stacked Deck?
+
+At some point, a box of spare computer parts becomes **three boxes**.
+
+Then you've got Raspberry Pis in a drawer, an old GPU in a closet, SSDs scattered across computers, six USB-C adapters that all look identical, and absolutely no clue whether you already own the thing you're about to buy on Amazon.
+
+**Stacked Deck fixes that.**
+
+Every piece of hardware becomes a card in your deck.
+
+Track what you own, where it lives, what computer it's installed in, which projects are using it, what it's worth, and — most importantly — **what you can build with the hardware you already have.**
+
+```text
+             YOUR HARDWARE
+                  │
+        ┌─────────┴─────────┐
+        ▼                   ▼
+   INVENTORY            COMPUTERS
+        │                   │
+        └─────────┬─────────┘
+                  ▼
+              YOUR DECK
+                  │
+       ┌──────────┼──────────┐
+       ▼          ▼          ▼
+    PROJECTS   AI VALUE   LOCATIONS
+       │          │          │
+       └──────────┼──────────┘
+                  ▼
+          BUILD SOMETHING
+```
+
+---
+
+# ♦️ The Good Stuff
+
+## 📦 Hardware Inventory That Doesn't Suck
+
+Track your gear with more than a sad spreadsheet.
+
+Stacked Deck understands:
+
+- CPUs
+- GPUs
+- RAM
+- storage
+- motherboards
+- power supplies
+- networking gear
+- Raspberry Pis
+- microcontrollers
+- adapters
+- peripherals
+- complete computers
+- custom hardware categories
+- basically whatever weird tech you have accumulated
+
+Each card can include:
+
+**manufacturer · model · quantity · condition · status · serial number · purchase price · current value · location · tags · notes · image**
+
+Search it. Filter it. Sort it. Actually find it again.
+
+---
+
+## 🤖 Point a Camera at Your Hardware
+
+Don't feel like typing model numbers?
+
+Good.
+
+Take or upload a photo and let Stacked Deck analyze it.
+
+The AI hardware scanner can pull details such as:
+
+- hardware type
+- manufacturer
+- model
+- visible specifications
+- model numbers
+- serial information
+- confidence
+- estimated resale value
+
+You review the result **before anything is added to your inventory**.
+
+No blind automation. No AI quietly deciding your GTX 1080 is actually a toaster.
+
+<img src="docs/screenshots/mobile.png" alt="Stacked Deck Mobile View" width="420" />
+
+### Privacy by design
+
+Scan images are only sent when you explicitly hit **Scan photo**.
+
+Stacked Deck does **not** persist the uploaded scan image, and AI requests use server-side credentials rather than exposing API keys to the browser.
+
+---
+
+# 💰 Your Hardware Is a Portfolio
+
+You probably know how much money is in your bank account.
+
+Do you know how much money is sitting in your office?
+
+Stacked Deck can.
+
+Track:
+
+- purchase value
+- current estimated value
+- manual valuations
+- AI valuations
+- valuation ranges
+- valuation confidence
+- historical collection value
+- value by category
+- your most valuable gear
+- investment gain/loss
+- valuation coverage
+
+AI estimates are suggestions — **you stay in control**.
+
+A generated valuation becomes pending first. Review it, then decide whether it should become the item's current value.
+
+No mystery number silently replacing the price you entered.
+
+---
+
+## 📈 Watch Your Deck Change Over Time
+
+Stacked Deck keeps valuation history so your hardware collection stops being a static inventory and starts looking more like an actual portfolio.
+
+See how the value of your collection changes as you:
+
+```text
+BUY GEAR  ──►  BUILD SYSTEMS  ──►  REVALUE HARDWARE
+    │                 │                   │
+    ▼                 ▼                   ▼
+ + VALUE          REASSIGNED          MARKET CHANGE
+```
+
+It's not pretending your closet is the NASDAQ.
+
+But it is pretty damn satisfying.
+
+---
+
+# 🖥️ Computers Are More Than Inventory Items
+
+A computer isn't just another row in a database.
+
+Stacked Deck models systems and their installed hardware.
+
+Track:
+
+- desktop / laptop / mini PC / server / all-in-one
+- custom vs prebuilt systems
+- CPU
+- GPU
+- RAM
+- storage
+- motherboard
+- PSU
+- operating system
+- installed inventory components
+
+<img src="docs/screenshots/computers.png" alt="Stacked Deck Computers" width="900" />
+
+Installed components remain real inventory.
+
+So if your spare RTX card gets installed in a machine, Stacked Deck understands that it is **no longer sitting around available for another project**.
+
+Take it back out?
+
+It returns to the available deck.
+
+---
+
+# ♣️ Build With What You Already Own
+
+This is where Stacked Deck becomes more than inventory software.
+
+Create a project and describe what it needs.
+
+Then Stacked Deck checks your actual hardware inventory and tells you what you've already got.
+
+```text
+HOME SERVER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ CPU
+✅ 32 GB RAM
+✅ 2 TB SSD
+✅ Ethernet
+❌ Additional HDD
+❌ SATA adapter
+
+READY: 4 / 6 requirements
+```
+
+Hardware can be explicitly reserved for projects, preventing the same physical component from magically being used in three builds at once.
+
+Because apparently physics still applies.
+
+---
+
+# 🧠 Project Recommendations
+
+Not sure what to build?
+
+Stacked Deck can look at your available hardware and match it against project recipes.
+
+<img src="docs/screenshots/recommendations.png" alt="Stacked Deck Recommendations" width="900" />
+
+Built-in templates include:
+
+| Project              | 🛠️  |
+| -------------------- | --- |
+| NAS                  | 🗄️  |
+| Pi-hole              | 🕳️  |
+| Retro gaming box     | 🎮  |
+| Home server          | 🖥️  |
+| Home Assistant       | 🏠  |
+| Media server         | 🎬  |
+| Minecraft server     | ⛏️  |
+| Raspberry Pi cluster | 🍓  |
+| Network monitor      | 📡  |
+| Development server   | 💻  |
+| Local AI workstation | 🤖  |
+
+Recommendations consider available quantities and overlapping requirements instead of simply checking whether a matching item exists somewhere in your inventory.
+
+In other words:
+
+> **Stacked Deck doesn't just know what you own. It knows what your hardware can become.**
+
+---
+
+# 📍 "Where the Hell Did I Put It?"
+
+Hardware inventory is useless if the answer is still:
+
+> _"I know I own one somewhere."_
+
+Create locations as specific as you want:
+
+```text
+Home
+└── Office
+    └── Closet
+        └── Shelf 2
+            └── Bin 3
+```
+
+Assign hardware to those locations and finally stop buying duplicate cables because the first one disappeared into The Drawer™.
+
+---
+
+# 🃏 Project Reservations
+
+Projects can reserve actual quantities of hardware.
+
+If you have:
+
+```text
+4 × Raspberry Pi 4
+```
+
+and reserve:
+
+```text
+3 × Raspberry Pi 4 → Cluster Project
+```
+
+Stacked Deck knows you have:
+
+```text
+1 × Raspberry Pi 4 available
+```
+
+Assignments update availability across the entire application.
+
+Complete a project? The hardware stays **In Use**.
+
+Abandon it? Release the cards back into your deck.
+
+No double-booking.
+
+No imaginary RAM.
+
+---
+
+# 📱 Built for the Workbench Too
+
+Stacked Deck isn't only designed for a 32-inch developer monitor.
+
+It's responsive enough to use while you're:
+
+- standing over a parts bin
+- digging through a closet
+- checking a model number
+- photographing hardware
+- adding gear from your phone
+
+<img src="docs/screenshots/computers-mobile.png" alt="Stacked Deck Computers Mobile" width="420" />
+
+---
+
+# 🏗️ Architecture
+
+Stacked Deck is intentionally boring where boring is good.
+
+```text
+┌──────────────────────────────────────────────┐
+│                 React 19 UI                  │
+│     TypeScript · Vite · React Router         │
+└──────────────────────┬───────────────────────┘
+                       │
+                       │ /api
+                       ▼
+┌──────────────────────────────────────────────┐
+│                Express 5 API                 │
+│       Zod · Auth · Security · Matching       │
+└──────────────────────┬───────────────────────┘
+                       │
+              ┌────────┴────────┐
+              ▼                 ▼
+        ┌──────────┐       ┌───────────┐
+        │  SQLite  │       │ Azure SQL │
+        │  Local   │       │  Cloud    │
+        └──────────┘       └───────────┘
+
+                       +
+                       │
+                       ▼
+                ┌────────────┐
+                │   OpenAI   │
+                │ Vision /   │
+                │ Valuation  │
+                └────────────┘
+```
+
+### Frontend
+
+- React 19
+- TypeScript
+- React Router
+- Vite
+- Lucide
+- custom responsive CSS
+
+### Backend
+
+- Node.js
+- Express 5
+- Zod
+- server-side sessions
+- scrypt password hashing
+- rate limiting
+- security headers
+- CSRF protection
+
+### Data
+
+- SQLite for local/self-hosted installs
+- Azure SQL support
+- transactional migrations
+- integer-cent money storage
+- ownership-scoped relational data
+
+### AI
+
+- OpenAI Responses API
+- image understanding
+- structured outputs
+- validated hardware identification
+- optional equipment valuation
+
+---
+
+# 🚀 Run It
+
+### Requirements
+
+- **Node.js 22.12+**
+- Node 24 LTS recommended
+- npm
+
+Clone it:
+
+```bash
+git clone https://github.com/Rippley777/stacked-deck.git
+cd stacked-deck
+```
+
+Install dependencies:
+
+```bash
 npm ci
+```
+
+Create your environment file:
+
+```bash
 cp .env.example .env
+```
+
+Run migrations:
+
+```bash
 npm run db:migrate
+```
+
+Start development:
+
+```bash
 npm run dev
 ```
 
-Open **http://localhost:5173**. Create an account; new accounts start with an empty private deck. Shared project templates are installed automatically at API startup. Vite proxies `/api` to the Express server on port 3001.
+Then open:
 
-For the populated development experience, set `SEED_PASSWORD` in `.env` to a password of at least 12 characters, then:
+```text
+http://localhost:5173
+```
 
-```sh
+Create an account and start dealing cards.
+
+---
+
+# 🎲 Want Demo Data?
+
+Set a password in `.env`:
+
+```env
+SEED_PASSWORD=make-this-at-least-12-characters
+```
+
+Then run:
+
+```bash
 npm run db:seed
 ```
 
-Sign in with `SEED_EMAIL` (default `demo@stackeddeck.local`) and your `SEED_PASSWORD`. Seeding never overwrites an existing account. The seed includes 16 hardware cards / 36 physical components, four locations, two projects, and all 11 templates. It includes the specified Raspberry Pis, NVIDIA GPUs (including an unavailable integrated laptop GPU), storage drives, networking, adapters, and microcontrollers. Never enable demo credentials on a public production deployment.
+The seed deck includes hardware, computers, locations, projects, and project templates so you can immediately explore the full application.
 
-## AI hardware photos
+---
 
-Add `OPENAI_API_KEY` to your local `.env` or your deployment's server environment, then restart the app. Optionally set `OPENAI_VISION_MODEL` (default: `gpt-4.1-mini`). Keep the key on the server; do not prefix it with `VITE_`. API usage is billed to the configured OpenAI account. Without a key, manual inventory entry still works and the scan panel explains the missing setup.
+# 🤖 Enable AI Scanning + Valuation
 
-In **Add hardware** or **Add computer**, choose **Take photo** (opens the camera on supported mobile browsers) or **Upload photo**, then **Scan photo**. Review the evidence, uncertainty, model and serial number. Choose **Use these details** to fill the main form, or **Add installed component** to add a detected part to the computer being created. Correct any mistakes before saving. Scanning alone creates no inventory records. Closed cases and unreadable labels cannot reliably reveal internal specifications.
+Add your OpenAI API key:
 
-JPEG, PNG and WebP uploads up to 20 MB are resized to at most 2048 pixels on their longest side and re-encoded as JPEG in the browser, omitting original EXIF metadata. The scan endpoint accepts up to three images, each up to 4 MB and limits each signed-in user to 20 requests per hour per server process. Photos are sent to OpenAI only when Scan photo is pressed; Stacked Deck does not persist them. Requests use `store: false`. The integration uses the [Responses image input API](https://developers.openai.com/api/docs/guides/images-vision) with [structured output](https://developers.openai.com/api/docs/guides/structured-outputs), and validates suggestions before returning them.
+```env
+OPENAI_API_KEY=your_key_here
+```
 
-Automated tests mock the AI provider and cover upload/review/save, installed parts, authentication, validation, limits, timeouts and failures. Live identification quality requires testing with your own API key and representative hardware photos.
+Optionally choose models:
 
-If scanning returns a 429 error, the app distinguishes exhausted API credits, organization/project spend limits, approved usage limits and temporary rate limits. For exhausted credits, add credits in the [API billing settings](https://platform.openai.com/settings/organization/billing/overview) for the organization associated with your key. Billing and quota errors require credits or limit changes; repeated retries do not restore access. Temporary rate limits require spacing out scans. See the [OpenAI error guide](https://developers.openai.com/api/docs/guides/error-codes).
+```env
+OPENAI_VISION_MODEL=gpt-4.1-mini
+OPENAI_VALUATION_MODEL=gpt-4.1-mini
+```
 
-## Cable and power compatibility assistant
+Restart the server.
 
-Inventory cards now have optional, versioned `connectivity` specifications. Open **Add hardware** or **Edit hardware → Cables, power & connections** to describe a cable, a charger, a device’s power requirements, or its ports. Cable families show relevant fields. Unknown values remain absent; “No” is distinct from unknown. Brand/model, quantities, availability, condition, locations and reservations continue using existing inventory fields. A location such as `Office → Drawer 2 → Cable Bin` works without creating a separate accessory inventory.
+That's it.
 
-On device details, **What do I need?** searches only the signed-in owner’s inventory. On a cable or charger, **What uses this?** runs the comparison in reverse. Results include the requirement, a labeled status, plain-language reasons, location and owned/available quantities. Confirmed matches appear before limited or uncertain matches; availability breaks ties. This ordering uses the actual requirement outcomes, not a product quality score. Unsafe and incompatible results can be expanded. Broken, for-parts, sold and archived candidates are excluded. A broken subject cannot produce a safe match. A charger picker also checks a specific device/adapter pair.
+Your key stays on the server.
 
-### Specifications and persistence
+Without an OpenAI key, the rest of Stacked Deck continues working normally.
 
-`shared/connectivity.ts` contains the reusable connector catalog, Zod validation, domain types and status labels. Connector IDs are extensible strings. `connectivity` is one optional JSON column with separate `cable`, `adapter`, `power` and `connections` sections, following the existing `systemSpecs` pattern rather than adding dozens of nullable columns. Numeric units are V, A, W, mm, meters, Gbps, pixels and Hz. Video capabilities are paired width/height/refresh records. USB-PD profiles are voltage/current pairs. Device `current`/`wattage` describe requirements; adapter values describe output capacity. Record `proprietaryProtocol: "none"` only when the absence of a required handshake has been verified.
+---
 
-Migration **004_connectivity.sql** is supplied for both SQLite and Azure SQL and is applied by the existing startup migration runner. Legacy rows remain `NULL`, with quantities, locations, allocations and values unchanged. Updates from older clients that omit connectivity preserve it; an explicit `null` removes it. Both repositories serialize the same validated contract. No automatic parsing of old free-text notes into electrical facts occurs.
+# ⚙️ Environment
 
-### Deterministic checks and safety assumptions
+```env
+PORT=3001
+APP_ORIGIN=http://localhost:5173
 
-`shared/compatibility-engine.ts` is a pure, testable module with `check`, `checkPower`, `checkCable`, `findMatches`, `findCables` and `findPowerAdapters`. It does not contact AI. Its five outcomes are compatible, compatible with limitations, uncertain, incompatible and unsafe.
+DATABASE_PROVIDER=sqlite
+DATABASE_PATH=./data/stacked-deck.db
 
-- Fixed supplies require matching voltage and AC/DC type, sufficient current/watts, matching connectors and documented proprietary requirements. Barrel comparisons additionally require both dimensions and polarity. Higher current capacity is acceptable when the remaining requirements are satisfied. Known voltage, polarity or AC/DC mismatches are flagged unsafe. Missing critical information prevents confirmation. Variable supplies remain uncertain until their actual selected output is independently verified; this implementation does not certify them.
-- USB-PD requires explicitly recorded support and a shared voltage profile. Negotiated power is capped by both profiles, total output and the recorded per-port budget. Less power than the device target produces limitations, not a promise that the device will run. A charger with no shared documented voltage profile is incompatible with the recorded requirements. Multiport chargers require a known port budget. PPS/AVS voltage ranges, dynamic power sharing and proprietary negotiation are not modeled.
-- Cable comparisons check mating connectors/genders, direction (A → B for directional cables), explicit data/video/charging capabilities, requested bandwidth/power and paired video modes. An optional other-device port checks both ends. Without it, “compatible” describes the recorded device-side connection only. A lower video/data capability is incompatible with the requested performance; a lower charging rating produces a limitation. Unknown capability remains uncertain. Standard/version names alone do not prove higher performance or backwards interoperability. IEC connector pairs are recognized, but mains cords and audio pinouts remain uncertain because grounding, region, ratings and signal wiring are not fully modeled.
-- Scan metadata is always returned as **unreviewed**, regardless of AI claims. Both cards must be marked reviewed for a confirmed compatibility result. The form clears that review flag whenever specifications change. Review does not fill in unknown values. Users still need accurate labels/manufacturer documentation and undamaged hardware. A result evaluates recorded specifications, not a physical safety inspection.
-- Adapter checks do not validate the wall supply or a separate charging cable. In particular, a matching charger is not certification of the full charger/cable/device chain. Video checks also require the user to verify source/display capabilities, color depth and compression conditions. No connector appearance implies voltage, polarity, barrel dimensions, power negotiation or bandwidth.
+AZURE_SQL_SERVER=
+AZURE_SQL_DATABASE=
 
-These conservative rules keep cable power ratings and PD profiles distinct, consistent with the [USB-IF cable documentation](https://www.usb.org/cable_connector) and [USB Power Delivery overview](https://www.usb.org/usb-charger-pd). Supply output selection should be checked against the manufacturer's instructions, such as [CUI's external AC/DC supply manual](https://www.mouser.com/catalog/additional/external-ac-dc-instruction-manual.pdf).
+TRUST_PROXY=0
 
-### Scanning, duplicates and search
+SEED_EMAIL=demo@stackeddeck.local
+SEED_PASSWORD=
 
-The existing photo scanner now offers **Mystery cable**, **Mystery power adapter** and **Device port** modes. Add up to three photos of the same object (both ends, label, connector), then scan together in one provider request. The original single-image API remains supported. Server validation checks every image and rejects mixed single/multiple payloads. Explicit readable label data takes precedence over appearance; unknown electrical fields are omitted. Results show evidence, qualitative confidence, alternate connector candidates, likely uses and structured specifications. **Find compatible equipment I own** checks an unsaved scan without creating records. Those draft matches remain uncertain until specifications are reviewed and saved.
+OPENAI_API_KEY=
+OPENAI_VISION_MODEL=gpt-4.1-mini
+OPENAI_VALUATION_MODEL=
+```
 
-Possible duplicates are checked against the owner’s inventory using a matching manufacturer/model or consistent, sufficiently specific cable/adapter details (including PD profiles). Suggestions show quantities and locations; they never merge cards or increment quantities automatically. Existing cards can be edited to adjust quantity. Manufacturer/model matches and similar metadata are possible duplicates, not proof that two photos depict the same physical item.
+---
 
-Inventory **Filters → Cable & power filters** includes connector, accessory kind, minimum watts/Gbps, output voltage, barrel dimensions, standard, video support and resolution/refresh. These combine with category, location and availability filters before pagination. The search box also deterministically recognizes questions such as:
+# 🐳 Docker
 
-- `Show me USB-C cables that support 100W charging`
-- `Show me cables that can run 4K 120Hz`
-- `Show me HDMI 2.1 cables`
-- `Show me 12V power adapters`
-- `Show me adapters with 5.5 x 2.1mm connectors`
-- `Show me Ethernet cables capable of 10Gbps`
+Build and launch:
 
-Unrecognized words remain ordinary text search. This is a small query grammar, not an arbitrary natural-language AI service. Unknown ratings do not satisfy numeric filters.
+```bash
+APP_ORIGIN=https://deck.example.com docker compose up --build -d
+```
 
-New authenticated APIs follow the existing owner-scoped repository and CSRF patterns:
+The production container:
 
-| Operation                          | Route                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------ |
-| Saved item forward/reverse matches | `GET /api/inventory/:id/compatibility`                                   |
-| Specific saved device and adapter  | `POST /api/hardware/compatibility` with `deviceId`, `adapterId`          |
-| Unsaved scan matches               | `POST /api/hardware/matches` with `connectivity`                         |
-| Possible duplicate cards           | `POST /api/hardware/duplicates` with manufacturer/model/connectivity     |
-| Structured inventory search        | `GET /api/inventory` with the optional filter parameters above           |
-| Combined photo identification      | `POST /api/hardware/scan` with `image` or `images`, plus optional `mode` |
+- runs as an unprivileged user
+- serves the API and built React app from one Node process
+- stores SQLite data in a persistent volume
+- supports deployment behind an HTTPS reverse proxy
 
-Unit/integration tests cover electrical rules, PD, paired video modes, directional cables, queries, duplicates, ownership, legacy updates and migration. Provider calls are mocked, including multi-photo identification, null electrical values and strict output schemas. Browser tests cover manual charger entry, review flags, forward/reverse matches, locations, search, duplicate scans and mobile layout. The opt-in Azure SQL integration test also checks connectivity persistence; it requires a configured test database.
+For production SQLite deployments, keep it to **one application instance** with persistent storage.
 
-Next improvements: full device/charger/cable chain checks, verified manufacturer profiles with per-field evidence, PPS/AVS and shared-port power budgets, and connector-specific pinout/mains rules. For large inventories, move the owner-scoped in-memory filtering to indexed JSON projections or a normalized specification index. This release uses the existing inventory-loading architecture.
+For cloud scale, switch to the Azure SQL backend.
 
-## Equipment valuations and portfolio
+---
 
-Photo scans now identify hardware **and propose an initial per-unit USD resale estimate in one request**. Review the range, confidence and explanation before using the suggestion. A low-confidence identification receives no price. Unusable valuation output is discarded without discarding valid identification. Manual entry also has an optional **Estimate value** action after entering the model, condition and specifications. AI failure never prevents saving equipment manually.
+# ☁️ Azure
 
-On a hardware detail screen, **Refresh valuation** generates a pending estimate. **Apply estimate** saves it as the current AI value. Refreshing alone never replaces the current value. Pending estimates remain available under valuation history. A changed model, condition, or installed component invalidates an older proposal. A saved manual value always takes priority, including `$0`; replacing it requires explicitly checking the replacement option. Clearing the manual override restores the latest accepted AI estimate, or leaves the item unvalued if none exists. Ordinary metadata edits preserve the value's source. Values and purchase prices remain per unit.
+Stacked Deck includes an Azure SQL backend and Azure deployment tooling.
 
-The dashboard shows current value, known purchase spend, dollar/percentage change, category values, the most valuable holding, and historical collection value. Missing values contribute zero to totals; coverage counts and a separate comparison of holdings with both prices prevent interpreting missing purchase prices as profit. Complete computers and their installed parts are counted once, using whole-computer prices when supplied and known part prices otherwise. Sold/Archived holdings are excluded. **Value my collection** opens a list of unpriced cards to work through individually; it never starts a bulk background job.
+```bash
+npm run deploy:azure
+```
 
-### Provider and limits
+Full deployment notes live in:
 
-- Uses the existing server-only `OPENAI_API_KEY`. `OPENAI_VALUATION_MODEL` optionally selects the independent valuation model; it defaults to `OPENAI_VISION_MODEL`, then `gpt-4.1-mini`. Combined photo identification/valuation always uses `OPENAI_VISION_MODEL`.
-- `server/valuation.ts` exposes `ValuationService.estimateEquipmentValue`, separate from transport and photo identification. The shared prompt considers known model/specifications, condition, age, purchase information, accessories in notes, and installed parts for saved computers. Notes and labels are treated as untrusted data.
-- Requests use [Responses structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs) and `store: false`. Zod additionally validates currency, integer cents, finite nonnegative prices, confidence, explanation length and ordered ranges.
-- The initial provider has **no live marketplace comparables**. It must not claim recent sales or cite fabricated listings. Confidence is capped at medium; photo estimates assume untested used condition unless confirmed later. These are editable estimates, not appraisals or guaranteed sale prices.
-- A request times out after 45 seconds. Independent valuations are limited to 20 attempts per signed-in user per hour, with one in-flight request per item and a one-minute cooldown after a saved AI proposal. Photo scans retain their separate 20/hour allowance. Controls are centralized in `shared/valuation.ts`; seven days marks a stale value in the UI, not an automatic refresh schedule. The rate limiter/in-flight guard are process-local, consistent with the current single-instance setup.
-- Equipment details are sent only when the user requests a valuation. The independent provider omits serial numbers, image URLs, location and existing estimates. No scraping or marketplace API calls are implemented. Automated tests mock the provider and never make paid requests.
+[`docs/AZURE.md`](docs/AZURE.md)
 
-### Storage and historical semantics
+---
 
-Migration `003_valuations.sql` exists for both SQLite and Azure SQL. Startup applies it using the existing migration runner. It adds `aiValuation` (validated JSON), `manualValueOverrideCents` and `valuationUpdatedAt` to inventory; `estimatedValueCents` remains the effective current-value field for existing clients. Existing values become manual overrides, with baseline history dated at migration time, not retroactively at purchase time.
+# 🧪 This Thing Has Tests, Too
 
-`equipment_valuations` stores each successful AI refresh, its model/provider, range, confidence, explanation, server timestamp, input fingerprint and optional application timestamp/effective value. A pending proposal does not affect totals. Accepting it is retry-safe; older records remain. Manual changes also append records. Owner/item composite foreign keys and an owner/item/date index follow existing repository conventions. Deleting hardware cascades its detailed valuation records.
+Because **"works on my machine"** is not a testing strategy.
 
-`portfolio_value_events` stores only **changed per-item contributions**, in the same transaction as equipment/value/composition mutations. It is not a table of aggregate snapshots. Valuation records alone cannot reconstruct historical quantities, installations, archives or deletions; this small event ledger preserves those effects without copying entire portfolios. Historical item identifiers intentionally survive card deletion; events remain owner-scoped and cascade on user deletion. The migration records the starting holdings, and subsequent events never rewrite that baseline.
-
-Portfolio history makes one ordered pass over the owner's indexed event stream, carries recorded values forward, and returns the last total for each UTC day with activity plus today's total. The lightweight SVG step charts include an accessible value table and add no chart dependency. No values are fabricated before tracking starts. Collection changes affect the chart, so it is **not a time-weighted investment return**. For very long histories, range queries with a SQL opening balance and monthly sampling can replace the in-memory pass without changing the event model.
-
-Authenticated operations follow the existing `/api` conventions:
-
-| Operation                                 | Route                                                                           |
-| ----------------------------------------- | ------------------------------------------------------------------------------- |
-| Preview an unsaved item                   | `POST /api/hardware/valuation`                                                  |
-| Generate and retain a pending estimate    | `POST /api/inventory/:id/valuation`                                             |
-| Apply a reviewed estimate                 | `PUT /api/inventory/:id/valuation` with `valuationId`, optional `replaceManual` |
-| Set/clear a manual override               | `PUT /api/inventory/:id/manual-value` with nullable `valueCents`                |
-| Item history, including pending estimates | `GET /api/inventory/:id/valuations`                                             |
-| Totals, breakdown and history             | `GET /api/portfolio/valuation`                                                  |
-| Historical total values                   | `GET /api/portfolio/valuation-history`                                          |
-
-Next accuracy improvements: add authorized sold-listing APIs through the provider interface, normalize exact SKUs/specifications and condition, record comparable sale dates/locations, and calibrate ranges against actual sales. Multi-currency conversion, automated refresh scheduling and realized sale proceeds are not part of this first version.
-
-## What works
-
-- Account creation, sign in/out, protected API routes, private per-user workspaces, persistent 30-day sessions.
-- Inventory creation, details, edits, archive/restore and deletion. Quantities, condition, base status, manufacturer, model, per-unit purchase/current values, purchase date, serial, notes, tags and optional image URL.
-- Complete computer catalog: desktops, laptops, mini PCs, servers and all-in-ones; prebuilt/custom build origin; processor, graphics, RAM, storage, motherboard, power supply and OS specifications. When creating a computer, enter installed components directly: each component name reveals another optional input below. The computer and its new parts save together, with all entered quantities installed. Existing parts can also be linked from your deck with quantity limits and cannot be double-booked for projects.
-- AI photo identification: take a photo on a supported phone or upload an image in Add hardware / Add computer. Scan visible hardware and labels, review the suggestions, then fill a hardware form or add installed components before saving.
-- Custom categories and tags. Search across names, manufacturer, model, serial, notes and tags. Category, status, location and tag filters, paging, grid/list views.
-- Location management with descriptive paths such as `Office → Shelf → Bin 3`. Deleting a location clears the location reference without deleting its hardware.
-- Dashboard with physical quantities, availability, assigned units, a valuation portfolio with historical charts and category values, recent additions, status breakdown and recommendations.
-- Project CRUD, statuses, descriptions, notes, cost estimates, required/optional components and a live compatibility checklist.
-- Explicit, quantity-based inventory assignments. A project displays its hardware; each hardware card links back to its projects. Transactional allocation prevents overbooking.
-- Eleven shared templates: NAS, Pi-hole, RetroPie-style gaming, home server, Home Assistant, media server, Minecraft server, Pi cluster, network monitoring, development server and local AI workstation.
-- Recommendations show matched hardware, missing quantities, optional matches, readiness and additional purchase estimates. Creating a project from a template copies its requirements; it does not silently reserve components.
-- Responsive layouts, native modal focus handling, validation/error feedback, loading/empty states, reduced motion support, locally served fonts and custom SVG category illustrations.
-
-## Architecture and boundaries
-
-| Layer          | Technology / responsibility                                                                                     |
-| -------------- | --------------------------------------------------------------------------------------------------------------- |
-| Browser        | React 19, React Router, TypeScript, Vite, Lucide icons, plain CSS                                               |
-| HTTP API       | Express 5; explicit authenticated JSON routes; shared Zod validation                                            |
-| Data           | SQLite locally; Azure SQL for Azure hosting; foreign keys and versioned transactional migrations                |
-| Authentication | Asynchronous scrypt password hashing, provider-neutral identities, hashed random session tokens in the database |
-| Matching       | Pure deterministic integer-capacity matching; independent of HTTP and persistence                               |
-| Delivery       | One Node process serves the built client and API; Docker image and Compose example included                     |
-
-The user ID comes exclusively from the authenticated session. Owner-scoped repository queries and composite ownership foreign keys protect references between inventory, locations, projects, tags and assignments. Money is stored as integer USD cents; inventory values and purchase prices are **per unit**. Dashboard valuation multiplies current value by quantity and excludes Sold/Archived items; unpriced items contribute zero.
-
-SQLite keeps the MVP simple and is intended for **one application instance with a persistent local disk**. Indexed ownership/status/category/location queries isolate users. Inventory filter hydration currently loads one user's deck before filtering/paging, which is appropriate for hundreds of cards but should move into indexed SQL/FTS for very large individual decks. Use the shared Azure SQL backend and a distributed rate-limit store before scaling to multiple application servers. WAL permits concurrent reads but SQLite still serializes writers; see [SQLite WAL documentation](https://www.sqlite.org/wal.html).
-
-### Schema
-
-- `users`: profile and unique normalized email.
-- `identities`: user, provider, provider subject, optional password hash. The schema can accommodate OAuth identities; no OAuth providers are implemented yet.
-- `sessions`: hashed token, user and expiry. Cookies are HTTP-only, SameSite=Lax, and Secure in production. Tokens rotate on sign in; logout revokes the server session.
-- `categories`, `tags`: per-user vocabulary; `item_tags` connects cards to tags.
-- `locations`: per-user descriptive storage locations.
-- `inventory_items`: hardware fields and owner/category/location relationships; component/system kind and optional structured computer specifications.
-- `system_components`: owner-constrained links from complete computers to installed inventory parts and quantities.
-- `projects`, `project_requirements`: private build plans and editable criteria.
-- `project_assignments`: owner-constrained project/item relationship with allocated quantity.
-- `project_templates`, `template_requirements`: shared build recipes, installed idempotently at startup.
-- `schema_migrations`: records applied SQL migrations.
-
-Requirement categories/tags are small JSON arrays inside otherwise relational requirement rows. Categories are OR alternatives; tags are AND constraints. When both are present, a card must satisfy the category and all tags. Tag-only requirements support arbitrary accessories. Template edits belong in `server/templates.ts`; startup updates shared templates, leaving users' copied projects unchanged.
-
-### Reservation semantics
-
-- `Available` is the allocatable base status. Other base statuses have zero available quantity.
-- Available units = total quantity − project assignments − installed units.
-- Each complete computer is a separate card with quantity 1. Its specs can be recorded without creating individual part cards.
-- Linked parts remain in your inventory. Removing a part or deleting its computer releases installed quantities; a computer assigned to a project must be released before changing its installed parts.
-- A computer’s declared value includes its parts. When no whole-computer value is set, the dashboard uses the sum of linked part values; installed units are excluded from separate component valuation.
-- Archive/sell a complete computer to exclude its whole value and its installed parts from the deck valuation. Installed parts remain unavailable until explicitly removed or the computer is deleted.
-- Idea/Planning/Ready assignments display as Reserved. In Progress/Complete assignments display as In Use.
-- Completing a build keeps its parts in use. Abandoning or deleting a project releases its assignments.
-- Release can also be done explicitly from the project's hardware list.
-- Assigned cards cannot be archived, deleted, marked unusable, or reduced below the allocated quantity until the affected assignments are released.
-- Each recommendation is an **independent alternative** using the current available deck. Parts can appear in different recommendations, but a physical unit is never counted twice within one recommendation.
-- Matching uses bipartite capacity flow to resolve overlapping requirements, matching required units before optional units. It maximizes covered quantities, then estimates the missing hardware; it does not optimize the monetary cost of alternative component allocations.
-- A project's checklist includes its own allocated hardware plus currently available hardware. A match in the checklist is not itself a reservation.
-
-### Important files
-
-| File                                                                                                       | Purpose                                                           |
-| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `shared/types.ts`, `shared/validation.ts`                                                                  | API contracts, enums, validation                                  |
-| `migrations/001_initial.sql`                                                                               | Tables, ownership constraints and indexes                         |
-| `server/db.ts`                                                                                             | Database configuration and transactional migrations               |
-| `server/auth.ts`                                                                                           | Password identities and session lifecycle                         |
-| `server/store.ts`, `server/sqlite-store.ts`, `server/sqlserver-store.ts`, `server/sqlserver-repository.ts` | Provider contract and Azure SQL persistence                       |
-| `server/repository.ts`                                                                                     | Owner-scoped persistence and reservation invariants               |
-| `server/app.ts`                                                                                            | API routes, validation, CSRF defense, security headers and errors |
-| `server/compatibility.ts`                                                                                  | Pure matching and ranking engine                                  |
-| `server/templates.ts`, `server/seed.ts`                                                                    | Build recipes and optional demo data                              |
-| `src/App.tsx`, `src/pages/`                                                                                | Authentication, workspace shell and application screens           |
-| `src/components/`, `src/styles.css`                                                                        | Shared forms, dialog, hardware art and responsive UI              |
-| `tests/`                                                                                                   | API integration, matching and browser workflow tests              |
-| `docs/IMPLEMENTATION.md`                                                                                   | Original implementation plan and boundaries                       |
-
-## Environment
-
-| Variable                                  | Default                                | Purpose                                                                           |
-| ----------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
-| `NODE_ENV`                                | `development`                          | Set `production` for secure cookies and static client serving                     |
-| `PORT`                                    | `3001`                                 | Express port; the dev proxy assumes 3001                                          |
-| `APP_ORIGIN`                              | `http://localhost:5173` in development | Exact trusted origin, without trailing slash. Required HTTPS origin in production |
-| `DATABASE_PROVIDER`                       | `sqlite`                               | `sqlite` for local disk, `sqlserver` for Azure SQL                                |
-| `AZURE_SQL_SERVER` / `AZURE_SQL_DATABASE` | none                                   | Required for Azure SQL; connections use Azure identity                            |
-| `DATABASE_PATH`                           | `./data/stacked-deck.db`               | Persistent SQLite file                                                            |
-| `TRUST_PROXY`                             | `0`                                    | Trusted reverse proxy hops; typically `1` behind one proxy                        |
-| `SEED_EMAIL`                              | `demo@stackeddeck.local`               | Optional demo account email                                                       |
-| `SEED_PASSWORD`                           | none                                   | Required only for creating the optional demo account                              |
-
-No application signing secret is required: sessions use cryptographically random 256-bit tokens; only their SHA-256 hashes are stored. Keep `.env`, database files and backups private. `.gitignore` and `.dockerignore` exclude local secrets/data.
-
-## Checks
-
-```sh
+```bash
 npm run typecheck
 npm run lint
 npm run format:check
 npm test
-npx playwright install chromium
 npm run test:e2e
 npm run build
 ```
 
-Unit and integration tests use in-memory databases. Playwright starts an isolated local server on ports 5179/3179 and uses `data/e2e.db`, so other projects running on the default development port cannot intercept the tests. It creates disposable accounts and hardware. `PLAYWRIGHT_BASE_URL` targets a deployed server instead.
+The project includes:
 
-The API suite covers account isolation, invalid cross-user references, credential/session hashing, CSRF rejection, input validation, filters, lifecycle behavior, and allocation limits. The matching suite covers quantity, overlap, specialist constraints, optional components, tag-only criteria, availability and ranking. Browser tests cover registration, locations, adding hardware, template matching, project creation, reservation, reload persistence, mobile layout and logout, plus computer creation, specifications, installed parts, edits and returning parts to the available deck.
+- Vitest unit/integration tests
+- Playwright browser tests
+- authentication coverage
+- inventory lifecycle tests
+- cross-user isolation tests
+- project allocation tests
+- recommendation/matching tests
+- AI provider mocks
+- valuation tests
+- responsive workflow tests
 
-See [verification notes](docs/VERIFICATION.md) for the completed run and deployment limits.
+---
 
-## Free Azure deployment
+# 🛠️ Useful Commands
 
-Use **App Service F1 + Azure SQL’s free offer**, with database overage billing disabled. The app includes an Azure SQL backend and repeatable deployment scripts. See [the Azure deployment guide](docs/AZURE.md) for the command, quota limits, managed identity, firewall setup and operational guidance. Local development still uses SQLite.
+| Command                | What it does                         |
+| ---------------------- | ------------------------------------ |
+| `npm run dev`          | Start API + Vite development servers |
+| `npm run build`        | Typecheck and build client/server    |
+| `npm start`            | Run production build                 |
+| `npm test`             | Run Vitest                           |
+| `npm run test:e2e`     | Run Playwright                       |
+| `npm run typecheck`    | TypeScript checks                    |
+| `npm run lint`         | ESLint                               |
+| `npm run format`       | Prettier                             |
+| `npm run db:migrate`   | Apply database migrations            |
+| `npm run db:seed`      | Seed demo data                       |
+| `npm run db:backup`    | Safely back up SQLite                |
+| `npm run deploy:azure` | Run Azure deployment tooling         |
 
-## Production deployment
+---
 
-```sh
-npm ci
-npm run build
-NODE_ENV=production APP_ORIGIN=https://deck.example.com TRUST_PROXY=1 npm start
-```
+# 🔮 What's Next?
 
-Run from the project root so `migrations/` and `dist/client/` resolve. Terminate TLS with a reverse proxy such as Caddy/nginx and forward to port 3001. Set `TRUST_PROXY` to the actual proxy topology; do not broadly trust arbitrary forwarded headers. Health is available at `/api/health`. Startup applies pending migrations and refreshes shared templates. SIGINT/SIGTERM close the HTTP server and database.
+There is plenty more hardware chaos to tame.
 
-Or use Docker Compose behind an HTTPS proxy:
+Some particularly interesting directions:
 
-```sh
-APP_ORIGIN=https://deck.example.com docker compose up --build -d
-```
+- 🔌 **connector + cable intelligence**
+- ⚡ **power requirement / adapter matching**
+- 📦 QR labels for bins and hardware
+- 🔎 specification-aware project compatibility
+- 📤 CSV / JSON import and export
+- 🛒 live marketplace valuation providers
+- 🧾 sold-price tracking
+- 🧰 user-created build recipes
+- 🔐 MFA / OAuth / account recovery
+- 🧠 smarter hardware recommendations
 
-The image runs as the unprivileged `node` user, binds the host port to loopback, and keeps its database in a named volume. Ensure the proxy is the only public entry point. Do not use an ephemeral/serverless filesystem or a shared network filesystem for this database. Do not launch multiple replicas with this SQLite setup. The Docker image has been built and smoke-tested locally; validate your own TLS proxy and persistent-volume setup before releasing publicly.
+The end goal is simple:
 
-### Backup and restore
+### **If you own a piece of technology, Stacked Deck should understand what it is, where it is, what it's worth, what it connects to, and what you can do with it.**
 
-Use SQLite's online backup API, which safely includes committed WAL data:
+---
 
-```sh
-npm run db:backup -- ./backups/stacked-deck-2026-09-28.db
-```
+# 🎴 Why "Stacked Deck"?
 
-In the production image (no development dependencies):
+Because your hardware collection already is one.
 
-```sh
-node --env-file-if-exists=.env dist/server/backup.js /app/data/backups/stacked-deck.db
-```
+Every GPU, Pi, drive, adapter, laptop, server, controller, router, and weird board you swear you're going to use someday is another card.
 
-Use a **new destination filename** for each backup. Store encrypted copies off-host and test restores. A backup inside the same volume is not disaster recovery. Before restoring, stop the application, preserve the existing database **and its WAL/SHM files**, then restore the backup at `DATABASE_PATH` with appropriate ownership. Do not copy only a live `.db` file while WAL writes are active. Back up before applying new migrations; migrations are forward-only.
+Stacked Deck just lets you finally **play the hand you've got.**
 
-### Current boundaries
+---
 
-Project-template readiness remains a category/tag check, **not proof of electrical or software compatibility**. The separate cable/power assistant evaluates explicitly recorded specifications within the scope described above. Templates cannot yet validate wattage, physical fit, interfaces, minimum RAM/VRAM, drive connectivity counts, or exact software support. Costs are rough editable USD estimates, not live prices. Photo URLs are displayed directly; uploaded scan images are analyzed but not persisted. Images contact the supplied external host (without a referrer). Artwork without a photo is illustrative by category.
+<div align="center">
 
-Authentication has rate limiting, generic login failures, scrypt, secure production cookies, same-origin write checks and JSON/custom-header CSRF protection. Email verification, recovery, MFA, OAuth, account deletion and session management screens are not part of this MVP. Public self-registration is enabled. Decide on registration policy and implement email recovery before opening a broad public service. The auth limiter is process-local, consistent with the single-instance deployment.
+## 🂡 STACKED DECK
 
-## Recommended next five features
+**Stop buying hardware you already own.**
 
 1. **Account recovery and verification:** verified emails, password reset, session/device management, and OAuth.
 2. **Portable inventories:** CSV/JSON import, export, bulk edits and deduplication.
