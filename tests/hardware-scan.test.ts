@@ -202,3 +202,67 @@ describe('hardware photo scanning', () => {
     expect(result.body.items).toEqual([]);
   });
 });
+
+it('combines three views into one unverified electrical record and never infers nulls', async () => {
+  upstream.mockResolvedValue(
+    response({
+      items: [
+        {
+          ...suggestion,
+          category: 'Power Adapter',
+          connectivity: {
+            version: 1,
+            verified: true,
+            evidence: 'Readable output label',
+            adapter: {
+              voltage: 12,
+              current: 2,
+              acDc: 'DC',
+              polarity: null,
+              connector: { connector: 'DC barrel', outerMm: null, innerMm: null },
+            },
+            cable: null,
+            power: null,
+            connections: null,
+          },
+          candidates: ['5.5 × 2.1mm barrel', '5.5 × 2.5mm barrel'],
+          likelyUses: ['Routers'],
+        },
+      ],
+      message: 'Verify connector dimensions.',
+    }),
+  );
+  const result = await user
+    .post('/api/hardware/scan')
+    .set(headers)
+    .send({ images: [image, image, image], mode: 'charger' });
+  expect(result.status).toBe(200);
+  expect(result.body.items).toHaveLength(1);
+  expect(result.body.items[0].connectivity.verified).toBe(false);
+  expect(result.body.items[0].connectivity.adapter.polarity).toBeUndefined();
+  expect(result.body.items[0].connectivity.adapter.connector.innerMm).toBeUndefined();
+  const body = JSON.parse(String(upstream.mock.calls[0][1]?.body));
+  expect(
+    body.input[0].content.filter((c: { type: string }) => c.type === 'input_image'),
+  ).toHaveLength(3);
+  expect(body.instructions).toContain('Mode: charger');
+  function checkStrict(value: unknown) {
+    if (!value || typeof value !== 'object') return;
+    const node = value as Record<string, unknown>;
+    if (node.properties) expect(node.required).toEqual(Object.keys(node.properties as object));
+    for (const child of Object.values(node)) checkStrict(child);
+  }
+  checkStrict(body.text.format.schema);
+  expect((await user.get('/api/inventory')).body.total).toBe(0);
+});
+it('rejects too many images, ambiguous payloads, malformed secondary photos and invalid modes without AI calls', async () => {
+  for (const body of [
+    { images: [image, image, image, image] },
+    { image, images: [image] },
+    { images: [image, 'bad'] },
+    { images: [] },
+    { image, mode: 'unrecognized' },
+  ])
+    expect((await user.post('/api/hardware/scan').set(headers).send(body)).status).toBe(400);
+  expect(upstream).not.toHaveBeenCalled();
+});

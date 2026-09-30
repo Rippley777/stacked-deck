@@ -1,3 +1,5 @@
+import { ConnectivitySummary, MatchResults } from './Connectivity';
+import type { CompatibilityMatch } from '../../shared/connectivity';
 import { ValuationSummary } from './Valuation';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Camera, Upload, ScanLine } from 'lucide-react';
@@ -25,7 +27,8 @@ export function HardwareScanner({
   const upload = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
   const generation = useRef(0);
-  const [photo, setPhoto] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [mode, setMode] = useState('hardware');
   const [preparing, setPreparing] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<HardwareScan>();
@@ -41,7 +44,7 @@ export function HardwareScanner({
   function clear() {
     generation.current++;
     controller.current?.abort();
-    setPhoto('');
+    setPhotos([]);
     setResult(undefined);
     setUsed([]);
     setError('');
@@ -49,15 +52,24 @@ export function HardwareScanner({
     setPreparing(false);
   }
   async function choose(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
     event.target.value = '';
-    if (!file) return;
-    clear();
+    if (!files.length) return;
+    if (photos.length + files.length > 3) {
+      setError('Use up to three photos of the same object.');
+      return;
+    }
+    generation.current++;
+    controller.current?.abort();
+    setResult(undefined);
+    setUsed([]);
+    setError('');
+    setScanning(false);
     const current = generation.current;
     setPreparing(true);
     try {
-      const image = await prepareScanPhoto(file);
-      if (generation.current === current) setPhoto(image);
+      const images = await Promise.all(files.map(prepareScanPhoto));
+      if (generation.current === current) setPhotos((previous) => [...previous, ...images]);
     } catch (e) {
       if (generation.current === current) setError((e as Error).message);
     } finally {
@@ -75,7 +87,10 @@ export function HardwareScanner({
       const result = hardwareScanSchema.parse(
         await api<HardwareScan>('/hardware/scan', {
           method: 'POST',
-          body: JSON.stringify({ image: photo }),
+          body: JSON.stringify({
+            ...(photos.length === 1 ? { image: photos[0] } : { images: photos }),
+            mode,
+          }),
           signal: controller.current.signal,
         }),
       );
@@ -92,8 +107,8 @@ export function HardwareScanner({
         <ScanLine size={19} /> Scan hardware from a photo
       </h3>
       <p className="muted small-text">
-        Photograph the hardware and its label in good light. Review the suggested details before
-        saving.
+        Photograph both cable ends, the electrical label and the connector. Add up to three views of
+        the same object, then review the suggested details before saving.
       </p>
       {config.loading ? (
         <p role="status">Checking photo scanning…</p>
@@ -106,6 +121,23 @@ export function HardwareScanner({
         </p>
       ) : (
         <>
+          <label className="scan-mode">
+            Identify
+            <select
+              aria-label="Scan mode"
+              value={mode}
+              disabled={scanning}
+              onChange={(e) => {
+                setMode(e.target.value);
+                setResult(undefined);
+              }}
+            >
+              <option value="hardware">Hardware</option>
+              <option value="cable">Mystery cable — what is this?</option>
+              <option value="charger">Mystery power adapter</option>
+              <option value="port">Device port</option>
+            </select>
+          </label>
           <input
             ref={camera}
             type="file"
@@ -117,6 +149,7 @@ export function HardwareScanner({
           />
           <input
             ref={upload}
+            multiple
             type="file"
             accept="image/jpeg,image/png,image/webp"
             aria-label="Upload hardware photo"
@@ -142,19 +175,40 @@ export function HardwareScanner({
             </button>
           </div>
           {preparing && <p role="status">Preparing photo…</p>}
-          {photo && (
+          {photos.length > 0 && (
             <>
-              <img className="scan-preview" src={photo} alt="Hardware photo to scan" />
+              <div className="scan-photo-list">
+                {photos.map((photo, index) => (
+                  <img
+                    key={index}
+                    className="scan-preview"
+                    src={photo}
+                    alt={
+                      index === 0 ? 'Hardware photo to scan' : `Hardware photo ${index + 1} to scan`
+                    }
+                  />
+                ))}
+              </div>
               <p className="muted small-text">
-                Scanning sends this photo to OpenAI for analysis. Stacked Deck does not save the
-                photo.
+                Scanning sends these photos to OpenAI for analysis. Stack Tech does not save the
+                photos. Add another photo above to show the label or other end.
               </p>
               <div className="scan-actions">
-                <button type="button" className="button primary" disabled={scanning} onClick={scan}>
-                  <ScanLine size={16} /> {scanning ? 'Scanning…' : 'Scan photo'}
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={scanning || preparing}
+                  onClick={scan}
+                >
+                  <ScanLine size={16} />{' '}
+                  {scanning
+                    ? 'Scanning…'
+                    : photos.length > 1
+                      ? 'Scan photos together'
+                      : 'Scan photo'}
                 </button>
                 <button type="button" className="button ghost" onClick={clear}>
-                  {scanning ? 'Cancel scan' : 'Remove photo'}
+                  {scanning ? 'Cancel scan' : photos.length > 1 ? 'Remove photos' : 'Remove photo'}
                 </button>
               </div>
             </>
@@ -191,6 +245,18 @@ export function HardwareScanner({
                       </p>
                     )}
                     {item.notes && <p className="muted small-text">{item.notes}</p>}
+                    {item.candidates?.length ? (
+                      <p>Possible connectors: {item.candidates.join(' · ')}</p>
+                    ) : null}
+                    {item.likelyUses?.length ? (
+                      <p>Common uses: {item.likelyUses.join(' · ')}</p>
+                    ) : null}
+                    {item.connectivity && (
+                      <>
+                        <ConnectivitySummary value={item.connectivity} />
+                        <ScanInventory item={item} />
+                      </>
+                    )}
                     {item.valuation ? (
                       <ValuationSummary value={item.valuation} />
                     ) : (
@@ -234,5 +300,70 @@ export function HardwareScanner({
         </p>
       )}
     </section>
+  );
+}
+
+function ScanInventory({ item }: { item: HardwareSuggestion }) {
+  const [duplicates, setDuplicates] = useState<
+    { itemId: string; name: string; quantity: number; location: string | null }[]
+  >([]);
+  const [matches, setMatches] = useState<CompatibilityMatch[]>();
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    api<{ items: typeof duplicates }>('/hardware/duplicates', {
+      method: 'POST',
+      body: JSON.stringify(item),
+      signal: controller.signal,
+    })
+      .then((r) => setDuplicates(r.items))
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      });
+    return () => controller.abort();
+  }, [item]);
+  return (
+    <div className="scan-inventory">
+      {duplicates.length > 0 && (
+        <div className="duplicate-notice">
+          <strong>
+            You may already own {duplicates.reduce((n, i) => n + i.quantity, 0)} of these.
+          </strong>
+          {duplicates.map((d) => (
+            <p key={d.itemId}>
+              {d.name} · ×{d.quantity} · {d.location || 'No location'}
+            </p>
+          ))}
+          <p className="small-text">
+            Compare these cards before adding another. You can edit an existing card’s quantity.
+          </p>
+        </div>
+      )}
+      <button
+        type="button"
+        className="button secondary"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError('');
+          try {
+            const result = await api<{ matches: CompatibilityMatch[] }>('/hardware/matches', {
+              method: 'POST',
+              body: JSON.stringify({ connectivity: item.connectivity }),
+            });
+            setMatches(result.matches);
+          } catch (e) {
+            setError((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? 'Checking inventory…' : 'Find compatible equipment I own'}
+      </button>
+      {error && <p role="alert">{error}</p>}
+      {matches && <MatchResults matches={matches} />}
+    </div>
   );
 }

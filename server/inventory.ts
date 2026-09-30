@@ -4,6 +4,7 @@ import type { ItemInput } from '../shared/validation.js';
 import { AppError } from './errors.js';
 export type InventoryRow = Omit<
   InventoryItem,
+  | 'connectivity'
   | 'aiValuation'
   | 'systemSpecs'
   | 'tags'
@@ -11,7 +12,7 @@ export type InventoryRow = Omit<
   | 'components'
   | 'installedIn'
   | 'availableQuantity'
-> & { systemSpecs: string | null; aiValuation: string | null };
+> & { connectivity?: string | null; systemSpecs: string | null; aiValuation: string | null };
 export function hydrateInventory(
   items: InventoryRow[],
   assignments: Assignment[],
@@ -23,6 +24,7 @@ export function hydrateInventory(
     const installedIn = components.filter((c) => c.itemId === item.id);
     return {
       ...item,
+      connectivity: item.connectivity ? JSON.parse(item.connectivity) : null,
       aiValuation: item.aiValuation ? JSON.parse(item.aiValuation) : null,
       systemSpecs: item.systemSpecs ? JSON.parse(item.systemSpecs) : null,
       tags: tags.filter((t) => t.itemId === item.id).map((t) => t.tag),

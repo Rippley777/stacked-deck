@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { connectivitySchema } from './connectivity.js';
 import { valuationSchema } from './valuation.js';
 import {
   buildTypes,
@@ -36,6 +37,7 @@ export const systemSpecsSchema = z.object({
 });
 export const itemSchema = z
   .object({
+    connectivity: connectivitySchema.nullable().optional(),
     initialValuation: valuationSchema.nullable().optional(),
     kind: z.enum(['Component', 'System']).default('Component'),
     systemSpecs: systemSpecsSchema.nullable().default(null),

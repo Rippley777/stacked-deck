@@ -31,6 +31,42 @@ if (!/^[a-z][a-z0-9-]{3,39}$/.test(appName))
     'Use a lowercase app name, 4–40 characters, containing letters, numbers and hyphens.',
   );
 const resourceGroup = process.env.AZURE_RESOURCE_GROUP || `rg-${appName}`;
+// Preserve the public origin on redeploy; the Azure hostname may sit behind a custom domain.
+const existingApp = az(['webapp', 'list']).find(
+  (web) => web.name === appName && web.resourceGroup.toLowerCase() === resourceGroup.toLowerCase(),
+);
+const configuredOrigin =
+  process.env.APP_ORIGIN?.trim() ||
+  (existingApp
+    ? az([
+        'webapp',
+        'config',
+        'appsettings',
+        'list',
+        '-g',
+        resourceGroup,
+        '-n',
+        appName,
+        '--query',
+        "[?name=='APP_ORIGIN'].value | [0]",
+      ])
+    : '');
+let appOrigin = '';
+if (configuredOrigin) {
+  const url = new URL(configuredOrigin);
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  )
+    throw new Error(
+      'APP_ORIGIN must be an HTTPS origin without credentials, path, query or fragment.',
+    );
+  appOrigin = url.origin;
+}
 // All free-offer SQL databases in a subscription must use the same region.
 let freeRegion;
 for (const server of az(['sql', 'server', 'list'])) {
@@ -88,6 +124,7 @@ const result = az([
   'deploy/azure/main.bicep',
   '--parameters',
   `appName=${appName}`,
+  `appOrigin=${appOrigin}`,
   `administratorObjectId=${administrator.id}`,
   `administratorName=${administrator.displayName}`,
   '--query',

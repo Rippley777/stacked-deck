@@ -3817,3 +3817,163 @@ td {
     flex-wrap: wrap;
   }
 }
+
+/* Cable and power assistant follows the existing card/form vocabulary. */
+.connectivity-editor,
+.item-connectivity {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  margin: 16px 0;
+}
+.connectivity-editor summary,
+.connectivity-summary summary {
+  cursor: pointer;
+  font-weight: 650;
+  padding: 8px 0;
+}
+.spec-section,
+.power-comparison {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 16px;
+}
+.connector-fields {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.connector-fields legend {
+  font-size: 13px;
+  padding: 0 6px;
+}
+.spec-row {
+  border-left: 2px solid var(--line);
+  padding: 12px;
+  margin: 12px 0;
+}
+.spec-rows h4 {
+  margin: 14px 0 8px;
+}
+.spec-rows .button,
+.power-comparison .button {
+  margin: 10px 0;
+}
+.check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.check-label input {
+  width: auto;
+  margin-top: 3px;
+}
+.spec-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin: 8px 0 14px;
+}
+.spec-summary dt {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.spec-summary dd {
+  margin: 3px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.connectivity-summary p {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.compatibility-card {
+  padding: 16px;
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.compatibility-card-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.compatibility-card-heading a {
+  font-weight: 650;
+}
+.compatibility-card-heading span {
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.compatibility-explanation {
+  border-left: 3px solid #c7a768;
+  padding-left: 12px;
+  margin: 12px 0;
+}
+.compatibility-explanation.compatible {
+  border-color: #74b39d;
+}
+.compatibility-explanation.unsafe,
+.compatibility-explanation.incompatible {
+  border-color: #dc8790;
+}
+.compatibility-explanation ul {
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.scan-photo-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.scan-photo-list .scan-preview {
+  width: min(180px, 100%);
+  height: 130px;
+  object-fit: contain;
+}
+.scan-mode {
+  display: block;
+  margin-bottom: 14px;
+}
+.duplicate-notice {
+  border: 1px solid #c7a768;
+  padding: 12px;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.filter-row {
+  flex-wrap: wrap;
+}
+.filter-row input,
+.filter-row select {
+  min-width: 140px;
+  flex: 1 1 160px;
+}
+@media (max-width: 600px) {
+  .spec-summary {
+    grid-template-columns: 1fr;
+  }
+  .connectivity-editor,
+  .item-connectivity {
+    padding: 12px;
+  }
+}
+.connectivity-filters {
+  flex-basis: 100%;
+}
+.connectivity-filters summary {
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+.power-comparison > label {
+  display: block;
+  margin-bottom: 12px;
+}

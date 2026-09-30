@@ -1,3 +1,11 @@
+import { check, findMatches } from '../shared/compatibility-engine.js';
+import { connectivitySchema } from '../shared/connectivity.js';
+import {
+  connectivityFilterSchema,
+  matchesConnectivity,
+  parseCableQuery,
+  possibleDuplicates,
+} from '../shared/connectivity-search.js';
 import { valuationFingerprint } from './valuation-records.js';
 import express from 'express';
 import type { ErrorRequestHandler, Request, Response, NextFunction } from 'express';
@@ -36,7 +44,7 @@ import type { AppStore, UserRepository } from './store.js';
 import { recommend, evaluateTemplate } from './compatibility.js';
 import { AppError } from './errors.js';
 import { inventoryValue } from './inventory.js';
-import { identifyHardware, scanConfigured, scanImage } from './hardware-scan.js';
+import { identifyHardware, scanConfigured, scanImages } from './hardware-scan.js';
 interface Options {
   production?: boolean;
   origin?: string;
@@ -151,9 +159,10 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
       legacyHeaders: false,
       message: { error: 'You have reached 20 scans this hour. Try again later.' },
     }),
-    express.json({ limit: '6mb' }),
+    express.json({ limit: '17mb' }),
     async (req, res) => {
-      res.json(await identifyHardware(scanImage(req.body)));
+      const input = scanImages(req.body);
+      res.json(await identifyHardware(input.images, input.mode));
     },
   );
   const valuationLimit = rateLimit({
@@ -271,7 +280,10 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
   app.get('/api/inventory', async (req, res) => {
     let items = await repo(res).inventory();
     const string = (value: unknown) => (typeof value === 'string' ? value : '');
-    const q = string(req.query.q).toLowerCase();
+    const parsedQuery = parseCableQuery(string(req.query.q));
+    const filters = { ...parsedQuery.filters, ...connectivityFilterSchema.parse(req.query) };
+    items = items.filter((i) => matchesConnectivity(i, filters));
+    const q = parsedQuery.text;
     if (q)
       items = items.filter((i) =>
         [
@@ -281,6 +293,7 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
           i.serialNumber,
           i.notes,
           ...i.tags,
+          JSON.stringify(i.connectivity || {}),
           ...Object.values(i.systemSpecs || {}),
         ]
           .join(' ')
@@ -314,6 +327,42 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
       page,
       limit,
     });
+  });
+  app.get('/api/inventory/:id/compatibility', async (req, res) => {
+    const subject = await repo(res).item(String(req.params.id));
+    res.json({ matches: findMatches(subject, await repo(res).inventory()) });
+  });
+  app.post('/api/hardware/compatibility', async (req, res) => {
+    const { deviceId, adapterId } = z
+      .object({ deviceId: z.string().min(1), adapterId: z.string().min(1) })
+      .parse(req.body);
+    const device = await repo(res).item(deviceId);
+    const adapter = await repo(res).item(adapterId);
+    const result = check(device.connectivity, adapter.connectivity);
+    if ([device, adapter].some((i) => i.status === 'Broken' || i.condition === 'For Parts')) {
+      result.status = 'unsafe';
+      result.reasons.unshift('This item is marked broken or for parts. Do not use it for power.');
+    }
+    res.json(result);
+  });
+  app.post('/api/hardware/matches', async (req, res) => {
+    const { connectivity } = z.object({ connectivity: connectivitySchema }).parse(req.body);
+    res.json({
+      matches: findMatches(
+        { id: '', connectivity: { ...connectivity, verified: false } },
+        await repo(res).inventory(),
+      ),
+    });
+  });
+  app.post('/api/hardware/duplicates', async (req, res) => {
+    const draft = z
+      .object({
+        manufacturer: z.string().max(160).optional(),
+        model: z.string().max(160).optional(),
+        connectivity: connectivitySchema.nullable().optional(),
+      })
+      .parse(req.body);
+    res.json({ items: possibleDuplicates(draft, await repo(res).inventory()) });
   });
   app.get('/api/inventory/:id', async (req, res) =>
     res.json(await repo(res).item(String(req.params.id))),

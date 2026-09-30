@@ -1,3 +1,4 @@
+import type { Connectivity } from '../../shared/connectivity';
 import { useRef, useState, type FormEvent } from 'react';
 import { Save } from 'lucide-react';
 import type { InventoryItem, Location } from '../../shared/types';
@@ -14,7 +15,16 @@ import type { HardwareSuggestion } from '../../shared/hardware-scan';
 
 function suggestedDetails(suggestion: HardwareSuggestion) {
   const { name, category, manufacturer, model, serialNumber, quantity, notes } = suggestion;
-  return { name, category, manufacturer, model, serialNumber, quantity, notes };
+  return {
+    name,
+    category,
+    manufacturer,
+    model,
+    serialNumber,
+    quantity,
+    notes,
+    connectivity: suggestion.connectivity,
+  };
 }
 export function ItemForm({
   item,
@@ -30,6 +40,7 @@ export function ItemForm({
   const isSystem = item ? item.kind === 'System' : system;
   const { refresh, notify } = useApp();
   const meta = useResource<{ categories: string[]; locations: Location[] }>('/meta');
+  const [scanConnectivity, setScanConnectivity] = useState<Connectivity | null>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [valuation, setValuation] = useState<Valuation | null>(null);
@@ -61,9 +72,11 @@ export function ItemForm({
   ]);
   function useSuggestion(suggestion: HardwareSuggestion) {
     setValuation(suggestion.valuation ?? null);
+    if (suggestion.connectivity) setScanConnectivity(suggestion.connectivity);
     // These are uncontrolled inputs. Update only the reviewed identification fields;
     // keep prices, location, condition, computer specs and other manual details.
     for (const [name, value] of Object.entries(suggestedDetails(suggestion))) {
+      if (name === 'connectivity') continue;
       const field = formRef.current?.elements.namedItem(name);
       if (
         (field instanceof HTMLInputElement ||
@@ -182,7 +195,13 @@ export function ItemForm({
                   }}
                 />
               )}
-              <ItemFields item={item} isSystem={isSystem} meta={meta.data!} autoFocus />
+              <ItemFields
+                item={item}
+                connectivityOverride={scanConnectivity}
+                isSystem={isSystem}
+                meta={meta.data!}
+                autoFocus
+              />
               {!item && (
                 <section className="valuation-review" aria-label="Initial valuation">
                   <h3>Initial market estimate</h3>

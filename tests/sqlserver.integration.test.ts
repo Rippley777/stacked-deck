@@ -55,10 +55,16 @@ test.skipIf(!enabled)(
       tags: ['ARM64'],
       locationId: location.body.id,
       estimatedValueCents: 6500,
+      connectivity: {
+        version: 1,
+        power: { voltage: 5, current: 3, connector: { connector: 'USB-C' } },
+      },
     };
     const card = await alice.post('/api/inventory').set(headers).send(input);
     expect(card.status).toBe(201);
     expect(card.body.tags).toEqual(['arm64']);
+    expect(card.body.connectivity).toEqual(input.connectivity);
+    expect((await bob.get(`/api/inventory/${card.body.id}/compatibility`)).status).toBe(404);
     expect(card.body.createdAt).toMatch(/Z$/);
     expect((await bob.get(`/api/inventory/${card.body.id}`)).status).toBe(404);
     expect((await bob.put(`/api/inventory/${card.body.id}`).set(headers).send(input)).status).toBe(

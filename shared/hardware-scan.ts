@@ -1,9 +1,14 @@
 import { z } from 'zod';
+import { connectivitySchema } from './connectivity.js';
 import { valuationSchema, valuationOutputSchema } from './valuation.js';
 import { defaultCategories } from './types.js';
 
+export const MAX_SCAN_PHOTOS = 3;
 export const MAX_SCAN_BYTES = 4 * 1024 * 1024;
 export const hardwareSuggestionSchema = z.object({
+  connectivity: connectivitySchema.nullable().optional(),
+  candidates: z.array(z.string().max(160)).max(5).optional(),
+  likelyUses: z.array(z.string().max(160)).max(8).optional(),
   valuation: valuationSchema.nullable().optional(),
   name: z.string().trim().min(1).max(160),
   category: z.enum(defaultCategories),

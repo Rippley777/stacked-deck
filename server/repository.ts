@@ -207,11 +207,19 @@ export class Repository {
       this.db
         .prepare('INSERT OR IGNORE INTO categories(userId,name) VALUES (?,?)')
         .run(this.userId, input.category);
-      const { tags, systemSpecs, initialValuation: _initial, ...rest } = input;
+      const { tags, systemSpecs, connectivity, initialValuation: _initial, ...rest } = input;
       void _initial;
       const { record, aiValuation, ...valueFields } = itemValueFields(input, previous);
       const fields = {
         ...rest,
+        connectivity:
+          connectivity === undefined
+            ? previous?.connectivity
+              ? JSON.stringify(previous.connectivity)
+              : null
+            : connectivity === null
+              ? null
+              : JSON.stringify(connectivity),
         ...valueFields,
         aiValuation: aiValuation ? JSON.stringify(aiValuation) : null,
         systemSpecs: systemSpecs ? JSON.stringify(systemSpecs) : null,

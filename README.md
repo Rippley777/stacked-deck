@@ -35,11 +35,67 @@ Add `OPENAI_API_KEY` to your local `.env` or your deployment's server environmen
 
 In **Add hardware** or **Add computer**, choose **Take photo** (opens the camera on supported mobile browsers) or **Upload photo**, then **Scan photo**. Review the evidence, uncertainty, model and serial number. Choose **Use these details** to fill the main form, or **Add installed component** to add a detected part to the computer being created. Correct any mistakes before saving. Scanning alone creates no inventory records. Closed cases and unreadable labels cannot reliably reveal internal specifications.
 
-JPEG, PNG and WebP uploads up to 20 MB are resized to at most 2048 pixels on their longest side and re-encoded as JPEG in the browser, omitting original EXIF metadata. The scan endpoint accepts images up to 4 MB and limits each signed-in user to 20 requests per hour per server process. Photos are sent to OpenAI only when Scan photo is pressed; Stacked Deck does not persist them. Requests use `store: false`. The integration uses the [Responses image input API](https://developers.openai.com/api/docs/guides/images-vision) with [structured output](https://developers.openai.com/api/docs/guides/structured-outputs), and validates suggestions before returning them.
+JPEG, PNG and WebP uploads up to 20 MB are resized to at most 2048 pixels on their longest side and re-encoded as JPEG in the browser, omitting original EXIF metadata. The scan endpoint accepts up to three images, each up to 4 MB and limits each signed-in user to 20 requests per hour per server process. Photos are sent to OpenAI only when Scan photo is pressed; Stacked Deck does not persist them. Requests use `store: false`. The integration uses the [Responses image input API](https://developers.openai.com/api/docs/guides/images-vision) with [structured output](https://developers.openai.com/api/docs/guides/structured-outputs), and validates suggestions before returning them.
 
 Automated tests mock the AI provider and cover upload/review/save, installed parts, authentication, validation, limits, timeouts and failures. Live identification quality requires testing with your own API key and representative hardware photos.
 
 If scanning returns a 429 error, the app distinguishes exhausted API credits, organization/project spend limits, approved usage limits and temporary rate limits. For exhausted credits, add credits in the [API billing settings](https://platform.openai.com/settings/organization/billing/overview) for the organization associated with your key. Billing and quota errors require credits or limit changes; repeated retries do not restore access. Temporary rate limits require spacing out scans. See the [OpenAI error guide](https://developers.openai.com/api/docs/guides/error-codes).
+
+## Cable and power compatibility assistant
+
+Inventory cards now have optional, versioned `connectivity` specifications. Open **Add hardware** or **Edit hardware → Cables, power & connections** to describe a cable, a charger, a device’s power requirements, or its ports. Cable families show relevant fields. Unknown values remain absent; “No” is distinct from unknown. Brand/model, quantities, availability, condition, locations and reservations continue using existing inventory fields. A location such as `Office → Drawer 2 → Cable Bin` works without creating a separate accessory inventory.
+
+On device details, **What do I need?** searches only the signed-in owner’s inventory. On a cable or charger, **What uses this?** runs the comparison in reverse. Results include the requirement, a labeled status, plain-language reasons, location and owned/available quantities. Confirmed matches appear before limited or uncertain matches; availability breaks ties. This ordering uses the actual requirement outcomes, not a product quality score. Unsafe and incompatible results can be expanded. Broken, for-parts, sold and archived candidates are excluded. A broken subject cannot produce a safe match. A charger picker also checks a specific device/adapter pair.
+
+### Specifications and persistence
+
+`shared/connectivity.ts` contains the reusable connector catalog, Zod validation, domain types and status labels. Connector IDs are extensible strings. `connectivity` is one optional JSON column with separate `cable`, `adapter`, `power` and `connections` sections, following the existing `systemSpecs` pattern rather than adding dozens of nullable columns. Numeric units are V, A, W, mm, meters, Gbps, pixels and Hz. Video capabilities are paired width/height/refresh records. USB-PD profiles are voltage/current pairs. Device `current`/`wattage` describe requirements; adapter values describe output capacity. Record `proprietaryProtocol: "none"` only when the absence of a required handshake has been verified.
+
+Migration **004_connectivity.sql** is supplied for both SQLite and Azure SQL and is applied by the existing startup migration runner. Legacy rows remain `NULL`, with quantities, locations, allocations and values unchanged. Updates from older clients that omit connectivity preserve it; an explicit `null` removes it. Both repositories serialize the same validated contract. No automatic parsing of old free-text notes into electrical facts occurs.
+
+### Deterministic checks and safety assumptions
+
+`shared/compatibility-engine.ts` is a pure, testable module with `check`, `checkPower`, `checkCable`, `findMatches`, `findCables` and `findPowerAdapters`. It does not contact AI. Its five outcomes are compatible, compatible with limitations, uncertain, incompatible and unsafe.
+
+- Fixed supplies require matching voltage and AC/DC type, sufficient current/watts, matching connectors and documented proprietary requirements. Barrel comparisons additionally require both dimensions and polarity. Higher current capacity is acceptable when the remaining requirements are satisfied. Known voltage, polarity or AC/DC mismatches are flagged unsafe. Missing critical information prevents confirmation. Variable supplies remain uncertain until their actual selected output is independently verified; this implementation does not certify them.
+- USB-PD requires explicitly recorded support and a shared voltage profile. Negotiated power is capped by both profiles, total output and the recorded per-port budget. Less power than the device target produces limitations, not a promise that the device will run. A charger with no shared documented voltage profile is incompatible with the recorded requirements. Multiport chargers require a known port budget. PPS/AVS voltage ranges, dynamic power sharing and proprietary negotiation are not modeled.
+- Cable comparisons check mating connectors/genders, direction (A → B for directional cables), explicit data/video/charging capabilities, requested bandwidth/power and paired video modes. An optional other-device port checks both ends. Without it, “compatible” describes the recorded device-side connection only. A lower video/data capability is incompatible with the requested performance; a lower charging rating produces a limitation. Unknown capability remains uncertain. Standard/version names alone do not prove higher performance or backwards interoperability. IEC connector pairs are recognized, but mains cords and audio pinouts remain uncertain because grounding, region, ratings and signal wiring are not fully modeled.
+- Scan metadata is always returned as **unreviewed**, regardless of AI claims. Both cards must be marked reviewed for a confirmed compatibility result. The form clears that review flag whenever specifications change. Review does not fill in unknown values. Users still need accurate labels/manufacturer documentation and undamaged hardware. A result evaluates recorded specifications, not a physical safety inspection.
+- Adapter checks do not validate the wall supply or a separate charging cable. In particular, a matching charger is not certification of the full charger/cable/device chain. Video checks also require the user to verify source/display capabilities, color depth and compression conditions. No connector appearance implies voltage, polarity, barrel dimensions, power negotiation or bandwidth.
+
+These conservative rules keep cable power ratings and PD profiles distinct, consistent with the [USB-IF cable documentation](https://www.usb.org/cable_connector) and [USB Power Delivery overview](https://www.usb.org/usb-charger-pd). Supply output selection should be checked against the manufacturer's instructions, such as [CUI's external AC/DC supply manual](https://www.mouser.com/catalog/additional/external-ac-dc-instruction-manual.pdf).
+
+### Scanning, duplicates and search
+
+The existing photo scanner now offers **Mystery cable**, **Mystery power adapter** and **Device port** modes. Add up to three photos of the same object (both ends, label, connector), then scan together in one provider request. The original single-image API remains supported. Server validation checks every image and rejects mixed single/multiple payloads. Explicit readable label data takes precedence over appearance; unknown electrical fields are omitted. Results show evidence, qualitative confidence, alternate connector candidates, likely uses and structured specifications. **Find compatible equipment I own** checks an unsaved scan without creating records. Those draft matches remain uncertain until specifications are reviewed and saved.
+
+Possible duplicates are checked against the owner’s inventory using a matching manufacturer/model or consistent, sufficiently specific cable/adapter details (including PD profiles). Suggestions show quantities and locations; they never merge cards or increment quantities automatically. Existing cards can be edited to adjust quantity. Manufacturer/model matches and similar metadata are possible duplicates, not proof that two photos depict the same physical item.
+
+Inventory **Filters → Cable & power filters** includes connector, accessory kind, minimum watts/Gbps, output voltage, barrel dimensions, standard, video support and resolution/refresh. These combine with category, location and availability filters before pagination. The search box also deterministically recognizes questions such as:
+
+- `Show me USB-C cables that support 100W charging`
+- `Show me cables that can run 4K 120Hz`
+- `Show me HDMI 2.1 cables`
+- `Show me 12V power adapters`
+- `Show me adapters with 5.5 x 2.1mm connectors`
+- `Show me Ethernet cables capable of 10Gbps`
+
+Unrecognized words remain ordinary text search. This is a small query grammar, not an arbitrary natural-language AI service. Unknown ratings do not satisfy numeric filters.
+
+New authenticated APIs follow the existing owner-scoped repository and CSRF patterns:
+
+| Operation                          | Route                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| Saved item forward/reverse matches | `GET /api/inventory/:id/compatibility`                                   |
+| Specific saved device and adapter  | `POST /api/hardware/compatibility` with `deviceId`, `adapterId`          |
+| Unsaved scan matches               | `POST /api/hardware/matches` with `connectivity`                         |
+| Possible duplicate cards           | `POST /api/hardware/duplicates` with manufacturer/model/connectivity     |
+| Structured inventory search        | `GET /api/inventory` with the optional filter parameters above           |
+| Combined photo identification      | `POST /api/hardware/scan` with `image` or `images`, plus optional `mode` |
+
+Unit/integration tests cover electrical rules, PD, paired video modes, directional cables, queries, duplicates, ownership, legacy updates and migration. Provider calls are mocked, including multi-photo identification, null electrical values and strict output schemas. Browser tests cover manual charger entry, review flags, forward/reverse matches, locations, search, duplicate scans and mobile layout. The opt-in Azure SQL integration test also checks connectivity persistence; it requires a configured test database.
+
+Next improvements: full device/charger/cable chain checks, verified manufacturer profiles with per-field evidence, PPS/AVS and shared-port power budgets, and connector-specific pinout/mains rules. For large inventories, move the owner-scoped in-memory filtering to indexed JSON projections or a normalized specification index. This release uses the existing inventory-loading architecture.
 
 ## Equipment valuations and portfolio
 
@@ -236,7 +292,7 @@ Use a **new destination filename** for each backup. Store encrypted copies off-h
 
 ### Current boundaries
 
-Readiness is a category/tag check, **not proof of electrical or software compatibility**. Templates cannot yet validate wattage, physical fit, interfaces, minimum RAM/VRAM, drive connectivity counts, or exact software support. Costs are rough editable USD estimates, not live prices. Photo URLs are displayed directly; uploaded scan images are analyzed but not persisted. Images contact the supplied external host (without a referrer). Artwork without a photo is illustrative by category.
+Project-template readiness remains a category/tag check, **not proof of electrical or software compatibility**. The separate cable/power assistant evaluates explicitly recorded specifications within the scope described above. Templates cannot yet validate wattage, physical fit, interfaces, minimum RAM/VRAM, drive connectivity counts, or exact software support. Costs are rough editable USD estimates, not live prices. Photo URLs are displayed directly; uploaded scan images are analyzed but not persisted. Images contact the supplied external host (without a referrer). Artwork without a photo is illustrative by category.
 
 Authentication has rate limiting, generic login failures, scrypt, secure production cookies, same-origin write checks and JSON/custom-header CSRF protection. Email verification, recovery, MFA, OAuth, account deletion and session management screens are not part of this MVP. Public self-registration is enabled. Decide on registration policy and implement email recovery before opening a broad public service. The auth limiter is process-local, consistent with the single-instance deployment.
 

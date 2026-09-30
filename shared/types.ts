@@ -1,3 +1,4 @@
+import type { Connectivity } from './connectivity.js';
 import type { Valuation } from './valuation.js';
 export const itemStatuses = [
   'Available',
@@ -67,6 +68,8 @@ export const defaultCategories = [
   'Cable',
   'Adapter',
   'Power Supply',
+  'Power Adapter',
+  'Charger',
   'Development Board',
   'Tool',
   'Miscellaneous',
@@ -92,6 +95,7 @@ export interface Assignment {
   projectStatus: (typeof projectStatuses)[number];
 }
 export interface InventoryItem {
+  connectivity?: Connectivity | null;
   kind: 'Component' | 'System';
   systemSpecs: SystemSpecs | null;
   components: SystemComponent[];

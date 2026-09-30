@@ -44,13 +44,25 @@ App Service settings are supplied by `deploy/azure/main.bicep`:
 | Setting                    | Value                                                             |
 | -------------------------- | ----------------------------------------------------------------- |
 | `NODE_ENV`                 | `production`                                                      |
-| `APP_ORIGIN`               | The web app's actual HTTPS default hostname                       |
+| `APP_ORIGIN`               | Custom public origin, or the Azure HTTPS default hostname         |
 | `DATABASE_PROVIDER`        | `sqlserver`                                                       |
 | `AZURE_SQL_SERVER`         | Dedicated server's `*.database.windows.net` hostname              |
 | `AZURE_SQL_DATABASE`       | `stacked-deck`                                                    |
 | `TRUST_PROXY`              | `1`                                                               |
 | `WEBSITE_RUN_FROM_PACKAGE` | `1`                                                               |
 | Build settings             | Azure-side builds disabled; the uploaded package is already built |
+
+For a custom public domain, set `APP_ORIGIN` to the exact browser origin, such as `https://stackeddeck.oddware.dev` (no trailing slash):
+
+```sh
+az webapp config appsettings set \
+  --resource-group rg-stacked-deck-270b0816 \
+  --name stacked-deck-270b0816 \
+  --settings APP_ORIGIN=https://stackeddeck.oddware.dev \
+  --output none
+```
+
+App Service restarts the app after this setting changes. The deploy script preserves the existing `APP_ORIGIN` on subsequent deployments. Set the `APP_ORIGIN` environment variable when running `npm run deploy:azure` to explicitly override it. First deployments without an override use the Azure default hostname. Direct Bicep deployments must pass `appOrigin` to retain a custom origin. The browser must use the configured hostname to log in; origin checks remain enabled.
 
 Azure supplies `PORT`. The backend accepts it and binds to `0.0.0.0`. TLS terminates at App Service; production cookies remain Secure/HTTP-only.
 

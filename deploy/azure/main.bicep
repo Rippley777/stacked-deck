@@ -6,6 +6,8 @@ param location string = resourceGroup().location
 param administratorObjectId string
 param administratorName string
 param databaseName string = 'stacked-deck'
+@description('Canonical HTTPS browser origin. Empty uses the Azure default hostname.')
+param appOrigin string = ''
 
 var serverName = '${appName}-sql'
 
@@ -76,7 +78,7 @@ resource settings 'Microsoft.Web/sites/config@2024-04-01' = {
   name: 'appsettings'
   properties: {
     NODE_ENV: 'production'
-    APP_ORIGIN: 'https://${web.properties.defaultHostName}'
+    APP_ORIGIN: empty(appOrigin) ? 'https://${web.properties.defaultHostName}' : appOrigin
     DATABASE_PROVIDER: 'sqlserver'
     AZURE_SQL_SERVER: sqlServer.properties.fullyQualifiedDomainName
     AZURE_SQL_DATABASE: database.name

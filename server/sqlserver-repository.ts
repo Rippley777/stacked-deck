@@ -209,11 +209,19 @@ export class SqlServerRepository implements UserRepository {
         'IF NOT EXISTS(SELECT 1 FROM categories WHERE userId=@userId AND name=@name) INSERT INTO categories(userId,name) VALUES (@userId,@name)',
         { name: input.category },
       );
-      const { tags, systemSpecs, initialValuation: _initial, ...rest } = input;
+      const { tags, systemSpecs, connectivity, initialValuation: _initial, ...rest } = input;
       void _initial;
       const { record, aiValuation, ...valueFields } = itemValueFields(input, previous);
       const fields = {
         ...rest,
+        connectivity:
+          connectivity === undefined
+            ? previous?.connectivity
+              ? JSON.stringify(previous.connectivity)
+              : null
+            : connectivity === null
+              ? null
+              : JSON.stringify(connectivity),
         ...valueFields,
         aiValuation: aiValuation ? JSON.stringify(aiValuation) : null,
         systemSpecs: systemSpecs ? JSON.stringify(systemSpecs) : null,

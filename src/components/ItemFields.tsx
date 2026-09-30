@@ -1,3 +1,5 @@
+import { ConnectivityFields } from './ConnectivityFields';
+import type { Connectivity } from '../../shared/connectivity';
 import type { InventoryItem, Location } from '../../shared/types';
 import { buildTypes, conditions, itemStatuses, systemCategories } from '../../shared/types';
 import { Field } from './ui';
@@ -12,6 +14,7 @@ export function ItemFields({
   onNameChange,
   showDetails = true,
   installed = false,
+  connectivityOverride,
 }: {
   item?: Partial<InventoryItem>;
   isSystem: boolean;
@@ -22,6 +25,7 @@ export function ItemFields({
   onNameChange?: (name: string) => void;
   showDetails?: boolean;
   installed?: boolean;
+  connectivityOverride?: Connectivity | null;
 }) {
   return (
     <div className="form-grid">
@@ -270,6 +274,11 @@ export function ItemFields({
               </Field>
             </>
           )}
+          <ConnectivityFields
+            key={JSON.stringify(connectivityOverride)}
+            initial={connectivityOverride ?? item?.connectivity}
+            prefix={prefix}
+          />
           <Field label="Notes" className="full">
             <textarea
               name={`${prefix}notes`}

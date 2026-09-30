@@ -1,3 +1,5 @@
+import { ItemConnectivity } from '../components/Connectivity';
+import { connectors } from '../../shared/connectivity';
 import { ItemValuation } from '../components/Valuation';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -131,6 +133,7 @@ export function ItemDetail({ id, onClose }: { id: string; onClose: () => void })
                 <dd>{date(i.createdAt)}</dd>
               </div>
             </dl>
+            <ItemConnectivity key={i.id + i.updatedAt} item={i} />
             <ItemValuation item={i} />
             {i.kind === 'System' && (
               <>
@@ -247,10 +250,14 @@ export default function InventoryPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [filters, setFilters] = useState(true);
   const [selected, setSelected] = useState(params.get('item') || '');
+  const queryText = params.get('q') || '';
+  const selectedId = params.get('item');
   useEffect(() => {
-    setSearch(params.get('q') || '');
-    if (params.get('item')) setSelected(params.get('item')!);
-  }, [params]);
+    setSearch(queryText);
+  }, [queryText]);
+  useEffect(() => {
+    if (selectedId) setSelected(selectedId);
+  }, [selectedId]);
   const query = new URLSearchParams(params);
   query.delete('item');
   query.set('limit', '12');
@@ -267,7 +274,26 @@ export default function InventoryPage() {
     else p.delete(key);
     setParams(p);
   }
-  const activeFilters = ['category', 'status', 'locationId', 'tag', 'q'].some((k) => params.has(k));
+  const activeFilters = [
+    'category',
+    'status',
+    'locationId',
+    'tag',
+    'q',
+    'accessory',
+    'connector',
+    'minWatts',
+    'voltage',
+    'minGbps',
+    'outerMm',
+    'innerMm',
+    'width',
+    'height',
+    'hz',
+    'standard',
+    'video',
+    'charging',
+  ].some((k) => params.has(k));
   return (
     <>
       <PageHeading
@@ -295,7 +321,7 @@ export default function InventoryPage() {
           <Search size={17} />
           <input
             aria-label="Search inventory"
-            placeholder="Search names, models, serial numbers, tags…"
+            placeholder="Search hardware, USB-C 100W cables, 12V adapters…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -367,6 +393,68 @@ export default function InventoryPage() {
             value={params.get('tag') || ''}
             onChange={(e) => filter('tag', e.target.value)}
           />
+          <details className="connectivity-filters">
+            <summary>Cable & power filters</summary>
+            <div className="filter-row">
+              <select
+                aria-label="Cable or charger"
+                value={params.get('accessory') || ''}
+                onChange={(e) => filter('accessory', e.target.value)}
+              >
+                <option value="">Cables & chargers: all</option>
+                <option value="cable">Cables</option>
+                <option value="adapter">Chargers / adapters</option>
+              </select>
+              <select
+                aria-label="Filter connector"
+                value={params.get('connector') || ''}
+                onChange={(e) => filter('connector', e.target.value)}
+              >
+                <option value="">Any connector</option>
+                {connectors.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+              {(
+                [
+                  ['minWatts', 'Minimum watts'],
+                  ['voltage', 'Output voltage (V)'],
+                  ['minGbps', 'Minimum Gbps'],
+                  ['outerMm', 'Barrel outer mm'],
+                  ['innerMm', 'Barrel inner mm'],
+                  ['width', 'Video width (px)'],
+                  ['height', 'Video height (px)'],
+                  ['hz', 'Refresh rate (Hz)'],
+                ] as const
+              ).map(([key, label]) => (
+                <input
+                  key={key}
+                  type="number"
+                  step="any"
+                  min="0.001"
+                  aria-label={label}
+                  placeholder={label}
+                  value={params.get(key) || ''}
+                  onChange={(e) => filter(key, e.target.value)}
+                />
+              ))}
+              <input
+                aria-label="Filter standard"
+                placeholder="Standard, e.g. HDMI 2.1"
+                value={params.get('standard') || ''}
+                onChange={(e) => filter('standard', e.target.value)}
+              />
+              <select
+                aria-label="Video capability"
+                value={params.get('video') || ''}
+                onChange={(e) => filter('video', e.target.value)}
+              >
+                <option value="">Any video capability</option>
+                <option value="true">Video capable</option>
+                <option value="false">No video support</option>
+              </select>
+            </div>
+          </details>
           {activeFilters && (
             <button
               className="text-link"

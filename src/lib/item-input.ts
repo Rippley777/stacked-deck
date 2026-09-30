@@ -16,6 +16,7 @@ export function readItemForm(form: FormData, key: string, systemEntry: boolean) 
           operatingSystem: str('operatingSystem'),
         }
       : null,
+    connectivity: str('connectivity') ? JSON.parse(str('connectivity')) : undefined,
     name: str('name'),
     manufacturer: str('manufacturer'),
     model: str('model'),
