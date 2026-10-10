@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { connectors, type Connectivity, type Endpoint } from '../../shared/connectivity';
 import { Field } from './ui';
 
@@ -190,11 +190,16 @@ function Rows({
 export function ConnectivityFields({
   initial,
   prefix = '',
+  onValueChange,
 }: {
   initial?: Connectivity | null;
+  onValueChange?: () => void;
   prefix?: string;
 }) {
   const [value, setValue] = useState<Connectivity>(initial || { version: 1 });
+  useEffect(() => {
+    onValueChange?.();
+  }, [value, onValueChange]);
   const update = (next: Partial<Connectivity>) =>
     setValue((v) => ({ ...v, ...next, verified: false }));
   const active = Boolean(value.cable || value.adapter || value.power || value.connections?.length);

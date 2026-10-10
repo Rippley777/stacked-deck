@@ -1418,6 +1418,41 @@ td {
   justify-content: space-between;
   align-items: center;
 }
+.rapid-entry-footer {
+  flex-wrap: wrap;
+}
+.rapid-entry-status {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+}
+.rapid-entry-footer .button {
+  min-height: 44px;
+}
+.field .keep-category {
+  margin-top: 2px;
+  align-items: center;
+  min-height: 32px;
+}
+.field .keep-category input {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .rapid-entry-footer .button {
+    flex: 1 1 auto;
+  }
+  .rapid-entry-footer .rapid-entry-save {
+    flex-basis: 100%;
+  }
+  .rapid-entry-shortcut {
+    display: none;
+  }
+  .field .keep-category {
+    min-height: 44px;
+  }
+}
 .modal-footer.split > div {
   display: flex;
   align-items: center;
@@ -3976,4 +4011,75 @@ td {
 .power-comparison > label {
   display: block;
   margin-bottom: 12px;
+}
+
+/* Compact advisory matches remain in the form flow, above the save controls. */
+.manual-duplicates {
+  grid-column: 1 / -1;
+  border: 1px solid #435337;
+  border-radius: 10px;
+  padding: 14px;
+  min-width: 0;
+}
+.manual-duplicates h3 {
+  margin: 0 0 6px;
+}
+.duplicate-card {
+  border: 1px solid #435337;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.duplicate-card p {
+  margin: 6px 0;
+}
+.duplicate-exact {
+  border: 2px solid #c79b52;
+}
+.duplicate-warning {
+  font-weight: 700;
+}
+.duplicate-heading,
+.duplicate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.duplicate-heading {
+  justify-content: space-between;
+}
+.duplicate-actions {
+  margin-top: 10px;
+}
+.duplicate-actions .button,
+.manual-duplicates > .button {
+  min-height: 44px;
+}
+.duplicate-quantity {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #435337;
+}
+.duplicate-quantity label {
+  display: grid;
+  gap: 6px;
+  max-width: 180px;
+}
+@media (max-width: 600px) {
+  .duplicate-actions .button {
+    flex: 1 1 180px;
+  }
+}
+
+.manual-duplicates .button {
+  white-space: normal;
+  text-align: center;
+}
+.duplicate-quantity input {
+  width: 100%;
+}
+.duplicate-lookup-error {
+  grid-column: 1 / -1;
 }

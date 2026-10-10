@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ConnectivityFields } from './ConnectivityFields';
 import type { Connectivity } from '../../shared/connectivity';
 import type { InventoryItem, Location } from '../../shared/types';
@@ -15,7 +16,13 @@ export function ItemFields({
   showDetails = true,
   installed = false,
   connectivityOverride,
+  keepCategory,
+  onKeepCategoryChange,
+  duplicateMatches,
+  onConnectivityChange,
 }: {
+  duplicateMatches?: ReactNode;
+  onConnectivityChange?: () => void;
   item?: Partial<InventoryItem>;
   isSystem: boolean;
   meta: { categories: string[]; locations: Location[] };
@@ -26,6 +33,8 @@ export function ItemFields({
   showDetails?: boolean;
   installed?: boolean;
   connectivityOverride?: Connectivity | null;
+  keepCategory?: boolean;
+  onKeepCategoryChange?: (keep: boolean) => void;
 }) {
   return (
     <div className="form-grid">
@@ -81,6 +90,16 @@ export function ItemFields({
                     <option key={c} value={c} />
                   ))}
                 </datalist>
+                {onKeepCategoryChange && (
+                  <label className="check-label keep-category">
+                    <input
+                      type="checkbox"
+                      checked={keepCategory}
+                      onChange={(e) => onKeepCategoryChange(e.target.checked)}
+                    />
+                    Keep category for next item
+                  </label>
+                )}
               </Field>
               <Field label={installed ? 'Quantity installed *' : 'Quantity *'}>
                 <input
@@ -110,6 +129,14 @@ export function ItemFields({
               placeholder="e.g. RTX 3070 Ti"
             />
           </Field>
+          <Field label="Serial number">
+            <input
+              name={`${prefix}serialNumber`}
+              defaultValue={item?.serialNumber}
+              maxLength={160}
+            />
+          </Field>
+          {duplicateMatches}
           <Field label="Condition">
             <select name={`${prefix}condition`} defaultValue={item?.condition || 'Good'}>
               {conditions.map((s) => (
@@ -187,13 +214,6 @@ export function ItemFields({
               name={`${prefix}purchaseDate`}
               type="date"
               defaultValue={item?.purchaseDate || ''}
-            />
-          </Field>
-          <Field label="Serial number">
-            <input
-              name={`${prefix}serialNumber`}
-              defaultValue={item?.serialNumber}
-              maxLength={160}
             />
           </Field>
           <Field label="Photo URL" className="full">
@@ -275,6 +295,7 @@ export function ItemFields({
             </>
           )}
           <ConnectivityFields
+            onValueChange={onConnectivityChange}
             key={JSON.stringify(connectivityOverride)}
             initial={connectivityOverride ?? item?.connectivity}
             prefix={prefix}

@@ -217,6 +217,48 @@ test.skipIf(!enabled)(
     );
     expect((await alice.get(`/api/inventory/${card.body.id}`)).body.locationId).toBeNull();
     expect((await alice.delete(`/api/inventory/${card.body.id}`).set(headers)).status).toBe(204);
+    const duplicateInput = {
+      ...input,
+      locationId: null,
+      model: 'Pi 4 8GB',
+      manufacturer: 'Raspberry Pi',
+    };
+    const duplicateCard = await alice.post('/api/inventory').set(headers).send(duplicateInput);
+    expect(duplicateCard.status).toBe(201);
+    const candidates = await alice
+      .post('/api/hardware/duplicates')
+      .set(headers)
+      .send({ model: 'PI-4-8GB', manufacturer: 'raspberry pi', category: 'Raspberry Pi' });
+    expect(candidates.status).toBe(200);
+    expect(candidates.body.items[0]).toMatchObject({
+      itemId: duplicateCard.body.id,
+      matchStrength: 'strong',
+    });
+    expect(
+      (await bob.post('/api/hardware/duplicates').set(headers).send(duplicateInput)).body.items,
+    ).toEqual([]);
+    const additions = await Promise.all(
+      [1, 1].map((addQuantity) =>
+        alice
+          .put(`/api/inventory/${duplicateCard.body.id}`)
+          .set(headers)
+          .send({ addQuantity, draft: duplicateInput }),
+      ),
+    );
+    expect(additions.map((result) => result.status)).toEqual([200, 200]);
+    expect((await alice.get(`/api/inventory/${duplicateCard.body.id}`)).body.quantity).toBe(5);
+    expect(
+      (
+        await alice
+          .put(`/api/inventory/${duplicateCard.body.id}`)
+          .set(headers)
+          .send({
+            addQuantity: 1,
+            draft: { ...duplicateInput, serialNumber: 'individually-tracked' },
+          })
+      ).status,
+    ).toBe(409);
+
     expect((await alice.post('/api/auth/logout').set(headers).send({})).status).toBe(204);
     expect((await alice.get('/api/auth/me')).status).toBe(401);
   },

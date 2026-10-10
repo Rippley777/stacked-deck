@@ -1,3 +1,5 @@
+import { quantityMergeProblem, type DuplicateIdentity } from '../shared/duplicates.js';
+import { itemSchema } from '../shared/validation.js';
 import type { Valuation, ValuationRecord, PortfolioEvent } from '../shared/valuation.js';
 import {
   decodeValuation,
@@ -170,16 +172,30 @@ export class Repository {
       )
       .all(this.userId) as Assignment[];
   }
-  inventory(): InventoryItem[] {
+  duplicateIdentities(): DuplicateIdentity[] {
+    const rows = this.db
+      .prepare(
+        'SELECT id,name,manufacturer,model,category,serialNumber,connectivity FROM inventory_items WHERE userId=?',
+      )
+      .all(this.userId) as (Omit<DuplicateIdentity, 'connectivity'> & {
+      connectivity: string | null;
+    })[];
+    return rows.map((row) => ({
+      ...row,
+      connectivity: row.connectivity ? JSON.parse(row.connectivity) : null,
+    }));
+  }
+  inventory(ids?: string[]): InventoryItem[] {
+    if (ids && !ids.length) return [];
     const assignments = this.assignments();
     const tagRows = this.db
       .prepare('SELECT itemId,tag FROM item_tags WHERE userId=?')
       .all(this.userId) as { itemId: string; tag: string }[];
     const rows = this.db
       .prepare(
-        `SELECT i.*,l.name locationName FROM inventory_items i LEFT JOIN locations l ON l.id=i.locationId WHERE i.userId=? ORDER BY i.createdAt DESC,i.id`,
+        `SELECT i.*,l.name locationName FROM inventory_items i LEFT JOIN locations l ON l.id=i.locationId WHERE i.userId=?${ids ? ` AND i.id IN (${ids.map(() => '?').join(',')})` : ''} ORDER BY i.createdAt DESC,i.id`,
       )
-      .all(this.userId) as InventoryRow[];
+      .all(this.userId, ...(ids || [])) as InventoryRow[];
     const components = this.db
       .prepare(
         'SELECT c.*,s.name systemName,i.name itemName,i.category FROM system_components c JOIN inventory_items s ON s.id=c.systemId JOIN inventory_items i ON i.id=c.itemId WHERE c.userId=?',
@@ -192,6 +208,18 @@ export class Repository {
     const item = this.inventory().find((i) => i.id === id);
     if (!item) throw new AppError(404, 'Hardware not found.');
     return item;
+  }
+  addQuantity(id: string, quantity: number, draft: ItemInput) {
+    return this.mutate(() => {
+      const current = this.item(id);
+      const problem = quantityMergeProblem(draft, current);
+      if (problem) throw new AppError(409, problem);
+      return this.saveItem(
+        itemSchema.parse({ ...current, quantity: current.quantity + quantity }),
+        id,
+        true,
+      );
+    });
   }
   saveItem(input: ItemInput, id: string = randomUUID(), update = false) {
     return this.mutate(() => {

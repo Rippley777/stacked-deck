@@ -22,6 +22,8 @@ let app: ReturnType<typeof createApp>;
 let user: ReturnType<typeof request.agent>;
 const upstream = vi.fn<typeof fetch>();
 beforeEach(async () => {
+  vi.stubEnv('AI_SCAN_LIMIT_PER_WINDOW', undefined);
+  vi.stubEnv('AI_SCAN_LIMIT_WINDOW_MINUTES', undefined);
   vi.stubEnv('OPENAI_API_KEY', 'test-only-key');
   vi.stubEnv('OPENAI_VISION_MODEL', 'test-vision-model');
   vi.stubGlobal('fetch', upstream);
@@ -35,6 +37,7 @@ beforeEach(async () => {
     .send({ name: 'Scanner', email: 'scan@example.com', password: 'photo-scan-password-123' });
 });
 afterEach(() => {
+  vi.useRealTimers();
   db.close();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -66,7 +69,11 @@ describe('hardware photo scanning', () => {
     upstream.mockResolvedValue(
       response({ items: [suggestion], message: 'Check the model label.' }),
     );
-    expect((await user.get('/api/hardware/scan')).body).toEqual({ enabled: true });
+    expect((await user.get('/api/hardware/scan')).body).toEqual({
+      enabled: true,
+      limit: 20,
+      windowMinutes: 60,
+    });
     const result = await user.post('/api/hardware/scan').set(headers).send({ image });
     expect(result.status).toBe(200);
     expect(result.body.items).toEqual([suggestion]);
@@ -82,7 +89,11 @@ describe('hardware photo scanning', () => {
   });
   it('reports missing configuration while manual inventory remains available', async () => {
     vi.stubEnv('OPENAI_API_KEY', '');
-    expect((await user.get('/api/hardware/scan')).body).toEqual({ enabled: false });
+    expect((await user.get('/api/hardware/scan')).body).toEqual({
+      enabled: false,
+      limit: 20,
+      windowMinutes: 60,
+    });
     expect((await user.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(503);
     expect((await user.get('/api/inventory')).status).toBe(200);
     expect(upstream).not.toHaveBeenCalled();
@@ -108,9 +119,11 @@ describe('hardware photo scanning', () => {
     expect(upstream).not.toHaveBeenCalled();
   });
   it('limits scans per user', async () => {
-    vi.stubEnv('OPENAI_API_KEY', '');
-    for (let i = 0; i < 20; i++) await user.post('/api/hardware/scan').set(headers).send({ image });
+    upstream.mockImplementation(async () => response({ items: [suggestion], message: '' }));
+    for (let i = 0; i < 20; i++)
+      expect((await user.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(200);
     expect((await user.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(429);
+    expect(upstream).toHaveBeenCalledTimes(20);
   });
   it.each([401, 403, 429, 500])(
     'handles provider error %s without leaking provider details',
@@ -265,4 +278,140 @@ it('rejects too many images, ambiguous payloads, malformed secondary photos and 
   ])
     expect((await user.post('/api/hardware/scan').set(headers).send(body)).status).toBe(400);
   expect(upstream).not.toHaveBeenCalled();
+});
+
+describe('configurable scan allowance', () => {
+  beforeEach(async () => {
+    vi.stubEnv('AI_SCAN_LIMIT_PER_WINDOW', '3');
+    vi.stubEnv('AI_SCAN_LIMIT_WINDOW_MINUTES', '5');
+    app = createApp(db, { trustProxy: 1 });
+    user = request.agent(app);
+    expect(
+      (
+        await user.post('/api/auth/login').set(headers).send({
+          email: 'scan@example.com',
+          password: 'photo-scan-password-123',
+        })
+      ).status,
+    ).toBe(200);
+    upstream.mockImplementation(async () => response({ items: [suggestion], message: '' }));
+  });
+
+  it('accepts three scans, then reports the configured window and standard rate-limit metadata', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const began = Date.now();
+    expect((await user.get('/api/hardware/scan')).body).toEqual({
+      enabled: true,
+      limit: 3,
+      windowMinutes: 5,
+    });
+    for (let i = 0; i < 3; i++) {
+      const result = await user.post('/api/hardware/scan').set(headers).send({ image });
+      expect(result.status).toBe(200);
+      expect(result.headers.ratelimit).toContain(`r=${2 - i}`);
+      expect(result.headers['ratelimit-policy']).toContain('q=3; w=300');
+    }
+    const exhausted = await user.post('/api/hardware/scan').set(headers).send({ image });
+    expect(exhausted.status).toBe(429);
+    expect(exhausted.body.error).toContain('3 scans per 5 minutes');
+    expect(exhausted.body.error).toContain('continue adding hardware manually');
+    expect(Number(exhausted.headers['retry-after'])).toBeGreaterThan(0);
+    expect(Number(exhausted.headers['retry-after'])).toBeLessThanOrEqual(300);
+    expect(exhausted.headers.ratelimit).toContain('r=0');
+    expect(upstream).toHaveBeenCalledTimes(3);
+    vi.setSystemTime(began + 5 * 60 * 1000 - 1);
+    expect((await user.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(429);
+    vi.setSystemTime(began + 5 * 60 * 1000);
+    const renewed = await user.post('/api/hardware/scan').set(headers).send({ image });
+    expect(renewed.status).toBe(200);
+    expect(renewed.headers.ratelimit).toContain('r=2');
+    expect(upstream).toHaveBeenCalledTimes(4);
+  });
+
+  it('keeps users behind the same IP separate and does not grant fresh quota on an IP or session change', async () => {
+    const other = request.agent(app);
+    const registered = await other.post('/api/auth/register').set(headers).send({
+      name: 'Other scanner',
+      email: 'other-scan@example.com',
+      password: 'photo-scan-password-123',
+    });
+    expect(registered.status).toBe(201);
+    for (let i = 0; i < 3; i++) {
+      expect(
+        (
+          await user
+            .post('/api/hardware/scan')
+            .set({ ...headers, 'X-Forwarded-For': '192.0.2.1' })
+            .send({ image })
+        ).status,
+      ).toBe(200);
+    }
+    expect(
+      (
+        await user
+          .post('/api/hardware/scan')
+          .set({ ...headers, 'X-Forwarded-For': '192.0.2.2' })
+          .send({ image })
+      ).status,
+    ).toBe(429);
+    await user
+      .post('/api/auth/login')
+      .set(headers)
+      .send({ email: 'scan@example.com', password: 'photo-scan-password-123' });
+    expect((await user.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(429);
+    for (let i = 0; i < 3; i++) {
+      expect(
+        (
+          await other
+            .post('/api/hardware/scan')
+            .set({ ...headers, 'X-Forwarded-For': '192.0.2.1' })
+            .send({ image })
+        ).status,
+      ).toBe(200);
+    }
+    expect((await other.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(429);
+    expect(upstream).toHaveBeenCalledTimes(6);
+  });
+
+  it('preserves manual creation and the independent 20-request valuation allowance after scan exhaustion', async () => {
+    for (let i = 0; i < 3; i++) await user.post('/api/hardware/scan').set(headers).send({ image });
+    expect((await user.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(429);
+    const input = {
+      name: 'Manual drive',
+      category: 'HDD',
+      quantity: 1,
+      condition: 'Good',
+      status: 'Available',
+    };
+    const saved = await user.post('/api/inventory').set(headers).send(input);
+    expect(saved.status).toBe(201);
+    expect(saved.body.name).toBe(input.name);
+    upstream.mockImplementation(async () =>
+      response({ valuation: null, message: 'Confirm the model.' }),
+    );
+    for (let i = 0; i < 20; i++) {
+      expect((await user.post('/api/hardware/valuation').set(headers).send(input)).status).toBe(
+        200,
+      );
+    }
+    const exhausted = await user.post('/api/hardware/valuation').set(headers).send(input);
+    expect(exhausted.status).toBe(429);
+    expect(exhausted.body.error).toContain('20 valuations');
+    expect(upstream).toHaveBeenCalledTimes(23);
+  });
+
+  it('snapshots environment settings at server construction and rejects invalid startup settings', async () => {
+    vi.stubEnv('AI_SCAN_LIMIT_PER_WINDOW', '0');
+    expect(() => createApp(db)).toThrow(
+      'AI_SCAN_LIMIT_PER_WINDOW must be a whole decimal integer from 1 to 1000.',
+    );
+    expect((await user.get('/api/hardware/scan')).body).toEqual({
+      enabled: true,
+      limit: 3,
+      windowMinutes: 5,
+    });
+    for (let i = 0; i < 3; i++)
+      expect((await user.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(200);
+    expect((await user.post('/api/hardware/scan').set(headers).send({ image })).status).toBe(429);
+  });
 });

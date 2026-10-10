@@ -1,5 +1,7 @@
+import { DuplicateMatches, readDuplicateDraft } from './DuplicateMatches';
+import type { DuplicateDraft } from '../../shared/duplicates';
 import type { Connectivity } from '../../shared/connectivity';
-import { useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Save } from 'lucide-react';
 import type { InventoryItem, Location } from '../../shared/types';
 import { readItemForm } from '../lib/item-input';
@@ -38,9 +40,21 @@ export function ItemForm({
   onSaved?: (item: InventoryItem) => void;
 }) {
   const isSystem = item ? item.kind === 'System' : system;
+  const canAddAnother = !item && !isSystem;
+  // Only these defaults belong to the session; everything else belongs to one item.
+  const [defaults, setDefaults] = useState<
+    Pick<Partial<InventoryItem>, 'locationId' | 'condition' | 'status' | 'tags' | 'category'>
+  >({});
+  const [keepCategory, setKeepCategory] = useState(false);
+  const [generation, setGeneration] = useState(0);
+  const [scanning, setScanning] = useState(false);
+  const saveLock = useRef(false);
+  const rapidButton = useRef<HTMLButtonElement>(null);
+  const startRef = useRef<HTMLParagraphElement>(null);
   const { refresh, notify } = useApp();
   const meta = useResource<{ categories: string[]; locations: Location[] }>('/meta');
   const [scanConnectivity, setScanConnectivity] = useState<Connectivity | null>();
+  const [duplicateDraft, setDuplicateDraft] = useState<DuplicateDraft | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [valuation, setValuation] = useState<Valuation | null>(null);
@@ -67,6 +81,22 @@ export function ItemForm({
     }
   }
   const formRef = useRef<HTMLFormElement>(null);
+  const updateDuplicateDraft = useCallback(() => {
+    if (formRef.current && !item) setDuplicateDraft(readDuplicateDraft(formRef.current, isSystem));
+  }, [item, isSystem]);
+  useEffect(() => {
+    if (!generation) return;
+    const form = formRef.current;
+    const name = form?.elements.namedItem('name');
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      // Return to scanning/entry without opening a touch keyboard after every save.
+      startRef.current?.focus({ preventScroll: true });
+      form?.closest('dialog')?.scrollTo({ top: 0 });
+    } else if (name instanceof HTMLInputElement) {
+      name.focus({ preventScroll: true });
+      name.scrollIntoView({ block: 'center' });
+    }
+  }, [generation]);
   const [components, setComponents] = useState<ComponentDraft[]>(() => [
     { id: crypto.randomUUID(), active: false },
   ]);
@@ -92,12 +122,45 @@ export function ItemForm({
               : String(value);
       }
     }
+    if (formRef.current) setDuplicateDraft(readDuplicateDraft(formRef.current, isSystem));
     notify('Suggested details added. Review the form before saving.');
+  }
+  async function addQuantity(id: string, quantity: number) {
+    if (saveLock.current || valuationLock.current || !formRef.current) return;
+    // Read enabled fields before marking the fieldset busy.
+    let draft;
+    try {
+      draft = readItemForm(new FormData(formRef.current), '', isSystem);
+    } catch (e) {
+      setError((e as Error).message);
+      return;
+    }
+    saveLock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const saved = await api<InventoryItem>(`/inventory/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ addQuantity: quantity, draft }),
+      });
+      refresh();
+      notify(`Added ${quantity} to ${saved.name}. Quantity is now ${saved.quantity}.`);
+      onClose();
+      onSaved?.(saved);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      saveLock.current = false;
+      setBusy(false);
+    }
   }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    if (busy || valuing) return;
+    const another =
+      canAddAnother && (e.nativeEvent as SubmitEvent).submitter === rapidButton.current;
+    if (saveLock.current || valuationLock.current || (another && scanning)) return;
+    saveLock.current = true;
     setBusy(true);
     setError('');
     try {
@@ -133,17 +196,32 @@ export function ItemForm({
       );
       refresh();
       notify(
-        item
-          ? 'Hardware updated.'
-          : isSystem
-            ? 'Computer added to your collection.'
-            : 'A new card in your deck.',
+        another
+          ? `Item ${generation + 1} added. Ready for the next.`
+          : item
+            ? 'Hardware updated.'
+            : isSystem
+              ? 'Computer added to your collection.'
+              : 'A new card in your deck.',
       );
-      onClose();
+      if (another) {
+        const { locationId, condition, status, tags, category } = inputs[0].input;
+        setDefaults({ locationId, condition, status, tags, ...(keepCategory ? { category } : {}) });
+        setDuplicateDraft(null);
+        setScanConnectivity(undefined);
+        setValuation(null);
+        setScanning(false);
+        setComponents([{ id: crypto.randomUUID(), active: false }]);
+        // Remount uncontrolled fields and scanner, whose cleanup aborts any scan.
+        setGeneration((value) => value + 1);
+      } else {
+        onClose();
+      }
       if (saved) onSaved?.(saved);
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      saveLock.current = false;
       setBusy(false);
     }
   }
@@ -168,10 +246,37 @@ export function ItemForm({
       ) : meta.error ? (
         <ErrorState message={meta.error} retry={meta.reload} />
       ) : (
-        <form ref={formRef} onSubmit={submit}>
-          <fieldset className="item-form-fields" disabled={busy || valuing}>
+        <form
+          ref={formRef}
+          onSubmit={submit}
+          onChange={(e) => {
+            if (!item && e.target instanceof HTMLElement && e.target.getAttribute('name'))
+              setDuplicateDraft(readDuplicateDraft(e.currentTarget, isSystem));
+          }}
+          aria-busy={busy || valuing}
+          onKeyDown={(e) => {
+            if (!canAddAnother || e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+            // Scope the shortcut to this modal, including when another dialog is on top.
+            if (
+              !(e.target instanceof Element) ||
+              e.target.closest('dialog') !== e.currentTarget.closest('dialog')
+            )
+              return;
+            e.preventDefault();
+            if (
+              e.repeat ||
+              e.nativeEvent.isComposing ||
+              saveLock.current ||
+              valuationLock.current ||
+              scanning
+            )
+              return;
+            if (rapidButton.current) e.currentTarget.requestSubmit(rapidButton.current);
+          }}
+        >
+          <fieldset key={generation} className="item-form-fields" disabled={busy || valuing}>
             <div className="form-body">
-              <p className="form-intro">
+              <p ref={startRef} className="form-intro" tabIndex={-1}>
                 {isSystem
                   ? 'Catalog a computer you own, whether it came prebuilt or you assembled it yourself.'
                   : 'Give your hardware a home. You can fill in the finer details later.'}
@@ -179,6 +284,7 @@ export function ItemForm({
               {!item && (
                 <HardwareScanner
                   isSystem={isSystem}
+                  onBusyChange={setScanning}
                   onUse={useSuggestion}
                   onAddComponent={(suggestion) => {
                     setComponents((rows) => [
@@ -196,11 +302,25 @@ export function ItemForm({
                 />
               )}
               <ItemFields
-                item={item}
+                onConnectivityChange={!item ? updateDuplicateDraft : undefined}
+                duplicateMatches={
+                  !item ? (
+                    <DuplicateMatches
+                      key={`${generation}:${JSON.stringify(duplicateDraft)}`}
+                      draft={duplicateDraft}
+                      locations={meta.data!.locations}
+                      onMerge={addQuantity}
+                      busy={busy || valuing}
+                    />
+                  ) : undefined
+                }
+                item={item ?? defaults}
                 connectivityOverride={scanConnectivity}
                 isSystem={isSystem}
                 meta={meta.data!}
-                autoFocus
+                autoFocus={generation === 0}
+                keepCategory={keepCategory}
+                onKeepCategoryChange={canAddAnother ? setKeepCategory : undefined}
               />
               {!item && (
                 <section className="valuation-review" aria-label="Initial valuation">
@@ -252,7 +372,20 @@ export function ItemForm({
               )}
             </div>
           </fieldset>
-          <div className="modal-footer">
+          <div className={`modal-footer ${canAddAnother ? 'rapid-entry-footer' : ''}`}>
+            {canAddAnother && (
+              <div className="rapid-entry-status muted small-text">
+                <span className="sr-only" role="status">
+                  {generation > 0 ? `Item ${generation} added. Ready for the next.` : ''}
+                </span>
+                {generation > 0 && (
+                  <span>
+                    {generation} {generation === 1 ? 'item' : 'items'} added this session
+                  </span>
+                )}
+                <span className="rapid-entry-shortcut">Ctrl/⌘ + Enter to save & add another</span>
+              </div>
+            )}
             <button
               type="button"
               className="button secondary"
@@ -271,6 +404,17 @@ export function ItemForm({
                     ? 'Add computer'
                     : 'Add hardware'}
             </button>
+            {canAddAnother && (
+              <button
+                ref={rapidButton}
+                type="submit"
+                className="button secondary rapid-entry-save"
+                disabled={busy || valuing || scanning}
+                aria-keyshortcuts="Control+Enter Meta+Enter"
+              >
+                Save &amp; add another
+              </button>
+            )}
           </div>
         </form>
       )}

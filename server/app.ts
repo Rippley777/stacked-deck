@@ -1,10 +1,11 @@
+import { duplicateDraftSchema } from '../shared/duplicates.js';
+import { findDuplicateCandidates } from './duplicates.js';
 import { check, findMatches } from '../shared/compatibility-engine.js';
 import { connectivitySchema } from '../shared/connectivity.js';
 import {
   connectivityFilterSchema,
   matchesConnectivity,
   parseCableQuery,
-  possibleDuplicates,
 } from '../shared/connectivity-search.js';
 import { valuationFingerprint } from './valuation-records.js';
 import express from 'express';
@@ -45,12 +46,15 @@ import { recommend, evaluateTemplate } from './compatibility.js';
 import { AppError } from './errors.js';
 import { inventoryValue } from './inventory.js';
 import { identifyHardware, scanConfigured, scanImages } from './hardware-scan.js';
+import { readScanLimitConfig, type ScanLimitConfig } from './config.js';
 interface Options {
   production?: boolean;
   origin?: string;
   trustProxy?: number;
+  scanLimits?: ScanLimitConfig;
 }
 export function createApp(database: DB | AppStore, options: Options = {}) {
+  const scanLimits = options.scanLimits ?? readScanLimitConfig();
   const db: AppStore = 'repository' in database ? database : new SqliteStore(database);
   const production = options.production ?? false;
   const compiledServer = resolve('dist/server/app.js');
@@ -162,16 +166,24 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
     next();
   });
   const repo = (res: Response) => res.locals.repo as UserRepository;
-  app.get('/api/hardware/scan', (_req, res) => res.json({ enabled: scanConfigured() }));
+  app.get('/api/hardware/scan', (_req, res) =>
+    res.json({
+      enabled: scanConfigured(),
+      limit: scanLimits.limit,
+      windowMinutes: scanLimits.windowMinutes,
+    }),
+  );
   app.post(
     '/api/hardware/scan',
     rateLimit({
-      windowMs: 60 * 60 * 1000,
-      limit: 20,
-      keyGenerator: (_req, res) => (res.locals.user as User).id,
+      windowMs: scanLimits.windowMs,
+      limit: scanLimits.limit,
+      keyGenerator: (_req, res) => `scan:user:${(res.locals.user as User).id}`,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      message: { error: 'You have reached 20 scans this hour. Try again later.' },
+      message: {
+        error: `AI scan allowance reached: ${scanLimits.limit} scans per ${scanLimits.windowMinutes} minutes. Try again after this window resets. You can continue adding hardware manually.`,
+      },
     }),
     express.json({ limit: '17mb' }),
     async (req, res) => {
@@ -369,14 +381,8 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
     });
   });
   app.post('/api/hardware/duplicates', async (req, res) => {
-    const draft = z
-      .object({
-        manufacturer: z.string().max(160).optional(),
-        model: z.string().max(160).optional(),
-        connectivity: connectivitySchema.nullable().optional(),
-      })
-      .parse(req.body);
-    res.json({ items: possibleDuplicates(draft, await repo(res).inventory()) });
+    const draft = duplicateDraftSchema.parse(req.body);
+    res.json(await findDuplicateCandidates(repo(res), draft));
   });
   app.get('/api/inventory/:id', async (req, res) =>
     res.json(await repo(res).item(String(req.params.id))),
@@ -388,9 +394,19 @@ export function createApp(database: DB | AppStore, options: Options = {}) {
     const { system, components } = systemWithComponentsSchema.parse(req.body);
     res.status(201).json(await repo(res).createSystem(system, components));
   });
-  app.put('/api/inventory/:id', async (req, res) =>
-    res.json(await repo(res).saveItem(itemSchema.parse(req.body), String(req.params.id), true)),
-  );
+  app.put('/api/inventory/:id', async (req, res) => {
+    if (req.body && Object.hasOwn(req.body, 'addQuantity')) {
+      const { addQuantity, draft } = z
+        .object({
+          addQuantity: z.number().int().min(1).max(100000),
+          draft: itemSchema,
+        })
+        .parse(req.body);
+      res.json(await repo(res).addQuantity(String(req.params.id), addQuantity, draft));
+    } else {
+      res.json(await repo(res).saveItem(itemSchema.parse(req.body), String(req.params.id), true));
+    }
+  });
   app.delete('/api/inventory/:id', async (req, res) => {
     await repo(res).deleteItem(String(req.params.id));
     res.status(204).end();

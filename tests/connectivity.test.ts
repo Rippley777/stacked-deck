@@ -74,6 +74,13 @@ const video: Connection = {
 const item = (id: string, connectivity: Connectivity, rest: Partial<InventoryItem> = {}) =>
   ({
     id,
+    kind: 'Component',
+    category: '',
+    serialNumber: '',
+    installedIn: [],
+    assignments: [],
+    tags: [],
+    locationId: null,
     name: id,
     connectivity,
     status: 'Available',

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { InventoryItem } from './types.js';
-import type { Connectivity } from './connectivity.js';
 const positive = z.coerce.number().positive().max(1000000).optional();
 export const connectivityFilterSchema = z.object({
   accessory: z.enum(['cable', 'adapter']).optional(),
@@ -140,65 +139,4 @@ export function parseCableQuery(query: string): { filters: ConnectivityFilter; t
       .trim();
   return { filters, text };
 }
-function consistent(a: unknown, b: unknown): boolean {
-  if (a === undefined || b === undefined) return true;
-  if (Array.isArray(a) || Array.isArray(b))
-    return (
-      Array.isArray(a) &&
-      Array.isArray(b) &&
-      a.length === b.length &&
-      a.every((v) => b.some((w) => consistent(v, w)))
-    );
-  if (a && b && typeof a === 'object' && typeof b === 'object')
-    return Object.entries(a).every(([k, v]) => consistent(v, (b as Record<string, unknown>)[k]));
-  return String(a).toLowerCase() === String(b).toLowerCase();
-}
-export function possibleDuplicates(
-  draft: { manufacturer?: string; model?: string; connectivity?: Connectivity | null },
-  inventory: InventoryItem[],
-) {
-  if (!draft.connectivity?.cable && !draft.connectivity?.adapter) return [];
-  return inventory
-    .filter((i) => {
-      if (['Sold', 'Archived'].includes(i.status)) return false;
-      if (
-        draft.manufacturer &&
-        draft.model &&
-        i.manufacturer.toLowerCase() === draft.manufacturer.toLowerCase() &&
-        i.model.toLowerCase() === draft.model.toLowerCase()
-      )
-        return true;
-      const c = draft.connectivity?.cable,
-        other = i.connectivity?.cable;
-      if (
-        c?.a?.connector &&
-        c.b?.connector &&
-        other?.a?.connector &&
-        other.b?.connector &&
-        (
-          [
-            'maxPowerW',
-            'standard',
-            'lengthM',
-            'maxDataGbps',
-            'usbVersion',
-            'displayStandard',
-          ] as const
-        ).some((key) => c[key] !== undefined && other[key] !== undefined)
-      )
-        return consistent(
-          { ...c, notes: undefined, certification: undefined },
-          { ...other, notes: undefined, certification: undefined },
-        );
-      const a = draft.connectivity?.adapter;
-      const existing = i.connectivity?.adapter;
-      return Boolean(
-        a?.connector?.connector &&
-        existing?.connector?.connector &&
-        ((a.voltage && a.current && existing.voltage && existing.current) ||
-          (a.pdProfiles?.length && existing.pdProfiles?.length)) &&
-        consistent(a, existing),
-      );
-    })
-    .map((i) => ({ itemId: i.id, name: i.name, location: i.locationName, quantity: i.quantity }));
-}
+export { possibleDuplicates } from './duplicates.js';

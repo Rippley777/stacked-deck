@@ -3,6 +3,9 @@ import { openDatabase } from './db.js';
 import { createApp } from './app.js';
 import { SqliteStore } from './sqlite-store.js';
 import { openSqlServerStore } from './sqlserver-store.js';
+import { readScanLimitConfig } from './config.js';
+// Validate configuration before opening the database or accepting requests.
+const scanLimits = readScanLimitConfig();
 const production = process.env.NODE_ENV === 'production';
 if (production && !process.env.APP_ORIGIN?.startsWith('https://'))
   throw new Error('Production requires an HTTPS APP_ORIGIN.');
@@ -17,9 +20,13 @@ const server = createApp(db, {
   production,
   origin: process.env.APP_ORIGIN,
   trustProxy: Number(process.env.TRUST_PROXY || 0),
-}).listen(Number(process.env.PORT || 3001), '0.0.0.0', () =>
-  console.log(`Stacked Deck API listening on port ${process.env.PORT || 3001}`),
-);
+  scanLimits,
+}).listen(Number(process.env.PORT || 3001), '0.0.0.0', () => {
+  console.log(`Stacked Deck API listening on port ${process.env.PORT || 3001}`);
+  console.log(
+    `AI hardware scan limit: ${scanLimits.limit} requests / ${scanLimits.windowMinutes} minutes per user`,
+  );
+});
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.on(signal, () => {
     server.close(async () => {

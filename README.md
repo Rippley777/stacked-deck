@@ -87,6 +87,36 @@ Each card can include:
 
 Search it. Filter it. Sort it. Actually find it again.
 
+Inventorying a whole shelf? Use **Save & add another** (or **Ctrl/⌘ + Enter**) to keep
+adding hardware without reopening the form. Location, condition, base status, and tags
+carry forward; **Keep category for next item** optionally carries the category too.
+Each new item starts with quantity 1 and fresh identification, photos, connections,
+and valuation fields. A session counter tracks saved cards until you close the form.
+The ordinary **Add hardware** action still saves and closes.
+
+Manual entry checks your deck after a 450 ms pause when you enter a serial number,
+a useful model, or a specific name with manufacturer context. Matches distinguish
+**exact serial**, **strong model**, and **possible** matches; generic names alone
+stay quiet. Serial comparison ignores casing and surrounding whitespace but preserves
+punctuation. Model comparison also treats hyphens and spaces alike, preserving model
+suffixes such as “Ti”. The AI scanner uses the same matching service.
+
+The form shows three matches initially, including locations, available quantities,
+archived/sold status, and installed/project assignments. **View item** opens the
+existing card in a new tab so your draft stays intact. **Create separate card anyway**
+keeps normal entry available. For matching, available components without serials or
+assignments, **Add to existing quantity** lets you review and confirm an increment.
+Different locations or entered item details require separate cards to preserve tracking.
+Successful rapid entry clears matches and quantity selections for the next item.
+
+Duplicate lookup remains session-owner scoped at `POST /api/hardware/duplicates`.
+The server reads an owner-indexed identifier projection and hydrates only the top 12
+matches; it never sends the full inventory to the browser. The existing
+`PUT /api/inventory/:id` also accepts `{ addQuantity, draft }`, validates the draft,
+rechecks merge eligibility inside the repository transaction, and applies the existing
+quantity validation and portfolio accounting. SQLite and Azure SQL use the same
+matching and merge rules. No schema migration or new configuration is required.
+
 ---
 
 ## 🤖 Point a Camera at Your Hardware
@@ -494,6 +524,42 @@ Your key stays on the server.
 
 Without an OpenAI key, the rest of Stacked Deck continues working normally.
 
+### Scan allowance for an inventory session
+
+The server limits photo-scan attempts per signed-in user. Normal/public defaults are:
+
+```env
+AI_SCAN_LIMIT_PER_WINDOW=20
+AI_SCAN_LIMIT_WINDOW_MINUTES=60
+```
+
+For a trusted personal inventory weekend, temporarily increase the allowance:
+
+```env
+AI_SCAN_LIMIT_PER_WINDOW=200
+AI_SCAN_LIMIT_WINDOW_MINUTES=60
+```
+
+Restart the server after changing these settings (Azure: update App Service application
+settings and restart). The server reads them once at startup, logs the allowance, and
+shows it in the scanner. `PER_WINDOW` means the count applies to the configured window,
+which is one hour by default. Each scan request counts once, including failed attempts;
+up to three photos in one request count as one attempt.
+
+Only positive decimal integers are accepted: **1–1,000 scans** and **1–1,440 minutes**
+(one day). Omit a setting to use its default. Blank, malformed, fractional, zero,
+negative, and out-of-range values stop startup with a configuration error. These bounds
+prevent accidental unbounded allowances and keep timer durations within safe limits.
+Keep these settings server-side; do not use a `VITE_` prefix.
+
+Higher allowances can increase OpenAI API usage and cost. They do not override OpenAI
+project/organization rate limits, spend limits, or available credits. Restore the
+conservative allowance afterward for public deployments. Independent valuations retain
+their separate allowance, and manual hardware entry remains available when scans run out.
+
+The existing limiter stores counters in memory per server process: restarts reset them,
+and multiple instances require a shared rate-limit store to enforce one combined quota.
+
 ---
 
 # ⚙️ Environment
@@ -655,7 +721,7 @@ Third-party components and assets retain their own licenses. Previously granted 
 
 ## House Edge analytics
 
-House Edge tracks page views, navigation, anonymous sessions, errors, and Web Vitals. The browser SDK is installed from `vendor/house-edge-analytics-0.1.1.tgz`, so this project can build independently of the House Edge repository or an npm registry publication. Commit the tarball with the dependency and lockfile.
+House Edge tracks page views, navigation, anonymous sessions, errors, and Web Vitals. The browser SDK is installed from `vendor/house-edge-analytics-0.1.2.tgz`, so this project can build independently of the House Edge repository or an npm registry publication. Commit the tarball with the dependency and lockfile.
 
 To activate it:
 

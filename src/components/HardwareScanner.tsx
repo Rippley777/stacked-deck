@@ -1,3 +1,4 @@
+import type { DuplicateMatch } from '../../shared/duplicates';
 import { ConnectivitySummary, MatchResults } from './Connectivity';
 import type { CompatibilityMatch } from '../../shared/connectivity';
 import { ValuationSummary } from './Valuation';
@@ -17,12 +18,16 @@ export function HardwareScanner({
   isSystem,
   onUse,
   onAddComponent,
+  onBusyChange,
 }: {
   isSystem: boolean;
   onUse: (item: HardwareSuggestion) => void;
   onAddComponent: (item: HardwareSuggestion) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
-  const config = useResource<{ enabled: boolean }>('/hardware/scan');
+  const config = useResource<{ enabled: boolean; limit?: number; windowMinutes?: number }>(
+    '/hardware/scan',
+  );
   const camera = useRef<HTMLInputElement>(null);
   const upload = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
@@ -34,6 +39,9 @@ export function HardwareScanner({
   const [result, setResult] = useState<HardwareScan>();
   const [used, setUsed] = useState<number[]>([]);
   const [error, setError] = useState('');
+  useEffect(() => {
+    onBusyChange?.(preparing || scanning);
+  }, [preparing, scanning, onBusyChange]);
   useEffect(
     () => () => {
       generation.current++;
@@ -121,6 +129,11 @@ export function HardwareScanner({
         </p>
       ) : (
         <>
+          {config.data.limit != null && config.data.windowMinutes != null && (
+            <p className="muted small-text">
+              AI scan allowance: {config.data.limit} scans per {config.data.windowMinutes} minutes.
+            </p>
+          )}
           <label className="scan-mode">
             Identify
             <select
@@ -254,9 +267,9 @@ export function HardwareScanner({
                     {item.connectivity && (
                       <>
                         <ConnectivitySummary value={item.connectivity} />
-                        <ScanInventory item={item} />
                       </>
                     )}
+                    <ScanInventory item={item} />
                     {item.valuation ? (
                       <ValuationSummary value={item.valuation} />
                     ) : (
@@ -304,9 +317,7 @@ export function HardwareScanner({
 }
 
 function ScanInventory({ item }: { item: HardwareSuggestion }) {
-  const [duplicates, setDuplicates] = useState<
-    { itemId: string; name: string; quantity: number; location: string | null }[]
-  >([]);
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
   const [matches, setMatches] = useState<CompatibilityMatch[]>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -317,7 +328,9 @@ function ScanInventory({ item }: { item: HardwareSuggestion }) {
       body: JSON.stringify(item),
       signal: controller.signal,
     })
-      .then((r) => setDuplicates(r.items))
+      .then((r) => {
+        if (!controller.signal.aborted) setDuplicates(r.items);
+      })
       .catch((e) => {
         if (!controller.signal.aborted) setError(e.message);
       });
@@ -330,9 +343,10 @@ function ScanInventory({ item }: { item: HardwareSuggestion }) {
           <strong>
             You may already own {duplicates.reduce((n, i) => n + i.quantity, 0)} of these.
           </strong>
-          {duplicates.map((d) => (
+          {duplicates.slice(0, 3).map((d) => (
             <p key={d.itemId}>
-              {d.name} · ×{d.quantity} · {d.location || 'No location'}
+              {d.name} · ×{d.quantity} · {d.location || 'No location'} · {d.status} ·{' '}
+              {d.matchStrength} match — {d.reasons.join(' · ')}
             </p>
           ))}
           <p className="small-text">
@@ -343,7 +357,7 @@ function ScanInventory({ item }: { item: HardwareSuggestion }) {
       <button
         type="button"
         className="button secondary"
-        disabled={busy}
+        disabled={busy || !item.connectivity}
         onClick={async () => {
           setBusy(true);
           setError('');

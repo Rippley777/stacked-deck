@@ -1,3 +1,5 @@
+import { quantityMergeProblem, type DuplicateIdentity } from '../shared/duplicates.js';
+import { itemSchema } from '../shared/validation.js';
 import type { Valuation, ValuationRecord, PortfolioEvent } from '../shared/valuation.js';
 import {
   decodeValuation,
@@ -170,13 +172,26 @@ export class SqlServerRepository implements UserRepository {
       'SELECT a.id,a.projectId,p.name projectName,p.status projectStatus,a.itemId,i.name itemName,a.quantity FROM project_assignments a JOIN projects p ON p.id=a.projectId JOIN inventory_items i ON i.id=a.itemId WHERE a.userId=@userId',
     );
   }
-  async inventory(): Promise<InventoryItem[]> {
+  async duplicateIdentities(): Promise<DuplicateIdentity[]> {
+    const rows = await this.query<
+      Omit<DuplicateIdentity, 'connectivity'> & { connectivity: string | null }
+    >(
+      'SELECT id,name,manufacturer,model,category,serialNumber,connectivity FROM inventory_items WHERE userId=@userId',
+    );
+    return rows.map((row) => ({
+      ...row,
+      connectivity: row.connectivity ? JSON.parse(row.connectivity) : null,
+    }));
+  }
+  async inventory(ids?: string[]): Promise<InventoryItem[]> {
+    if (ids && !ids.length) return [];
     const assignments = await this.assignments();
     const tagRows = await this.query<{ itemId: string; tag: string }>(
       'SELECT itemId,tag FROM item_tags WHERE userId=@userId',
     );
     const items = await this.query<InventoryRow>(
-      'SELECT i.*,l.name locationName FROM inventory_items i LEFT JOIN locations l ON l.id=i.locationId WHERE i.userId=@userId ORDER BY i.createdAt DESC,i.id',
+      `SELECT i.*,l.name locationName FROM inventory_items i LEFT JOIN locations l ON l.id=i.locationId WHERE i.userId=@userId${ids ? ` AND i.id IN (${ids.map((_, n) => `@candidate${n}`).join(',')})` : ''} ORDER BY i.createdAt DESC,i.id`,
+      Object.fromEntries((ids || []).map((id, n) => [`candidate${n}`, id])),
     );
     const components = await this.query<SystemComponent>(
       'SELECT c.*,s.name systemName,i.name itemName,i.category FROM system_components c JOIN inventory_items s ON s.id=c.systemId JOIN inventory_items i ON i.id=c.itemId WHERE c.userId=@userId',
@@ -187,6 +202,18 @@ export class SqlServerRepository implements UserRepository {
     const item = (await this.inventory()).find((i) => i.id === id);
     if (!item) throw new AppError(404, 'Hardware not found.');
     return item;
+  }
+  async addQuantity(id: string, quantity: number, draft: ItemInput) {
+    return this.mutate(async (r) => {
+      const current = await r.item(id);
+      const problem = quantityMergeProblem(draft, current);
+      if (problem) throw new AppError(409, problem);
+      return r.saveItem(
+        itemSchema.parse({ ...current, quantity: current.quantity + quantity }),
+        id,
+        true,
+      );
+    });
   }
   async saveItem(
     input: ItemInput,

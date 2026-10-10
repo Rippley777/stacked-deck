@@ -127,3 +127,33 @@ test('camera input adds identified parts to the same computer', async ({ page })
   await expect(dialog.getByRole('link', { name: 'Memory stick', exact: true })).toBeVisible();
   await expect(dialog.getByText('3 UNITS', { exact: true })).toBeVisible();
 });
+
+test('shows the configured allowance and keeps manual entry available after scan throttling', async ({
+  page,
+}) => {
+  const message =
+    'AI scan allowance reached: 200 scans per 60 minutes. Try again after this window resets. You can continue adding hardware manually.';
+  await page.route('**/api/hardware/scan', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ json: { enabled: true, limit: 200, windowMinutes: 60 } })
+      : route.fulfill({ status: 429, headers: { 'Retry-After': '60' }, json: { error: message } }),
+  );
+  await register(page);
+  await page.getByRole('button', { name: 'Add hardware', exact: true }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('AI scan allowance: 200 scans per 60 minutes.')).toBeVisible();
+  await dialog.getByLabel('Name *', { exact: true }).fill('Manually identified drive');
+  await dialog.getByLabel('Upload hardware photo').setInputFiles(photo);
+  await dialog.getByRole('button', { name: 'Scan photo', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveText(message);
+  await expect(dialog.getByLabel('Name *', { exact: true })).toHaveValue(
+    'Manually identified drive',
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await dialog.getByRole('button', { name: 'Add hardware', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const saved = await (await page.request.get('/api/inventory')).json();
+  expect(saved.items).toHaveLength(1);
+  expect(saved.items[0].name).toBe('Manually identified drive');
+});

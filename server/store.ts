@@ -1,3 +1,4 @@
+import type { DuplicateIdentity } from '../shared/duplicates.js';
 import type { Valuation, ValuationRecord, PortfolioEvent } from '../shared/valuation.js';
 import type {
   User,
@@ -21,7 +22,9 @@ export interface UserRepository {
   setManualValue(id: string, value: number | null): Awaitable<InventoryItem>;
   portfolioEvents(): Awaitable<PortfolioEvent[]>;
   assignments(): Awaitable<Assignment[]>;
-  inventory(): Awaitable<InventoryItem[]>;
+  duplicateIdentities(): Awaitable<DuplicateIdentity[]>;
+  inventory(ids?: string[]): Awaitable<InventoryItem[]>;
+  addQuantity(id: string, quantity: number, draft: ItemInput): Awaitable<InventoryItem>;
   item(id: string): Awaitable<InventoryItem>;
   saveItem(input: ItemInput, id?: string, update?: boolean): Awaitable<InventoryItem>;
   createSystem(input: ItemInput, components: ItemInput[]): Awaitable<InventoryItem>;
